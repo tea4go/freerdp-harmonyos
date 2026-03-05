@@ -25,21 +25,23 @@ Write-Host ""
 
 # 检查签名配置
 $projectRoot = $PSScriptRoot
-$signingDir = Join-Path $projectRoot ".signing"
+#$signingDir = Join-Path $projectRoot ".signing"
+$signingDir = "C:\Users\tony\.ohos\config"
 
-Write-Host "检查签名配置..." -ForegroundColor Yellow
+Write-Host "检查签名配置... $signingDir" -ForegroundColor Yellow
 
 if (Test-Path $signingDir) {
     $p12Files = Get-ChildItem -Path $signingDir -Filter "*.p12" -ErrorAction SilentlyContinue
     $cerFiles = Get-ChildItem -Path $signingDir -Filter "*.cer" -ErrorAction SilentlyContinue
     $p7bFiles = Get-ChildItem -Path $signingDir -Filter "*.p7b" -ErrorAction SilentlyContinue
-    
+
     if ($p12Files -and $cerFiles -and $p7bFiles) {
         Write-Host "签名文件检查通过" -ForegroundColor Green
         Write-Host "  - P12: $($p12Files.Name)" -ForegroundColor Gray
         Write-Host "  - CER: $($cerFiles.Name)" -ForegroundColor Gray
         Write-Host "  - P7B: $($p7bFiles.Name)" -ForegroundColor Gray
-    } else {
+    }
+    else {
         Write-Host "警告: 签名文件不完整" -ForegroundColor Yellow
         Write-Host "  缺少文件: " -ForegroundColor Yellow
         if (!$p12Files) { Write-Host "    - *.p12 (密钥库文件)" -ForegroundColor Red }
@@ -52,7 +54,8 @@ if (Test-Path $signingDir) {
         Write-Host "继续构建将使用未签名配置..." -ForegroundColor Yellow
         Start-Sleep -Seconds 2
     }
-} else {
+}
+else {
     Write-Host "警告: 未找到签名目录" -ForegroundColor Yellow
     Write-Host "  请运行: .\generate-debug-signature.ps1" -ForegroundColor Cyan
     Write-Host ""
@@ -62,12 +65,15 @@ Write-Host ""
 Write-Host "开始构建应用..." -ForegroundColor Yellow
 Write-Host ""
 
+# $env:Path += ";C:\Program Files\Huawei\DevEco Studio\jbr\bin;C:\Program Files\Huawei\DevEco Studio\tools\node;C:\Program Files\Huawei\DevEco Studio\tools\ohpm\bin;C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin"
+echo $env:Path
 # 清理构建
 if ($Clean) {
     Write-Host "清理构建缓存..." -ForegroundColor Yellow
-    if (Test-Path "hvigorw.bat") {
-        & .\hvigorw.bat clean
-    } else {
+    if (Test-Path "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat") {
+        & C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat clean
+    }
+    else {
         Write-Host "错误: 未找到 hvigorw.bat" -ForegroundColor Red
         exit 1
     }
@@ -78,17 +84,17 @@ if ($Clean) {
 $buildMode = if ($Release) { "release" } else { "debug" }
 Write-Host "构建模式: $buildMode" -ForegroundColor Cyan
 
-if (Test-Path "hvigorw.bat") {
+if (Test-Path "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat") {
     Write-Host "执行构建命令..." -ForegroundColor Yellow
-    & .\hvigorw.bat assembleHap --mode $buildMode
-    
+    & "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.bat" assembleHap --mode $buildMode
+
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
         Write-Host "==================================" -ForegroundColor Green
         Write-Host "构建成功!" -ForegroundColor Green
         Write-Host "==================================" -ForegroundColor Green
         Write-Host ""
-        
+
         # 查找生成的HAP文件
         $outputDir = Join-Path $projectRoot "entry\build\default\outputs\default"
         if (Test-Path $outputDir) {
@@ -104,7 +110,8 @@ if (Test-Path "hvigorw.bat") {
                 Write-Host "HAP文件已准备就绪，可以上传到测试服务器" -ForegroundColor Green
             }
         }
-    } else {
+    }
+    else {
         Write-Host ""
         Write-Host "==================================" -ForegroundColor Red
         Write-Host "构建失败!" -ForegroundColor Red
@@ -113,7 +120,8 @@ if (Test-Path "hvigorw.bat") {
         Write-Host "请检查上方的错误信息" -ForegroundColor Yellow
         exit 1
     }
-} else {
+}
+else {
     Write-Host "错误: 未找到 hvigorw.bat" -ForegroundColor Red
     Write-Host "请确保在项目根目录执行此脚本" -ForegroundColor Yellow
     exit 1

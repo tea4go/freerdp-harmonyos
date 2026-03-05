@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_huawei_zidkWqUbJdiXtzTPBr0kwe13uGqFltXrzJ2rrlWZQjY=.cer",
+          "certpath": "C:\\Users\\tony\\.ohos\\config\\default_freerdp-harmonyos_lEHWiL5R0PEmwzGQYsMdjAf0qDQI-qDO2EiktMNWoxQ=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A991BACCF4934C7E92E883CD7DD347E46C960A4EED92ED38103670A509E679FC0E2AB8ABCFEA5",
-          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_huawei_zidkWqUbJdiXtzTPBr0kwe13uGqFltXrzJ2rrlWZQjY=.p7b",
+          "keyPassword": "0000001ADF2D9256C7800699DD8B7F942C6F2D1EFDFF01BDAC0ECB84597E5078EF172D01E3CC2D5AC7C6",
+          "profile": "C:\\Users\\tony\\.ohos\\config\\default_freerdp-harmonyos_lEHWiL5R0PEmwzGQYsMdjAf0qDQI-qDO2EiktMNWoxQ=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_huawei_zidkWqUbJdiXtzTPBr0kwe13uGqFltXrzJ2rrlWZQjY=.p12",
-          "storePassword": "0000001AFA58AFDA9672451D9062C963C76F43147E0D9EA02872EE20504A24F72A28768F276DAB79B519"
+          "storeFile": "C:\\Users\\tony\\.ohos\\config\\default_freerdp-harmonyos_lEHWiL5R0PEmwzGQYsMdjAf0qDQI-qDO2EiktMNWoxQ=.p12",
+          "storePassword": "0000001A3C0B334C841EE9F3F4AF1A21D863628E8380CFB80D0ECB935B28B90E0D8A25B1160B7CB86C4F"
         }
       }
     ],

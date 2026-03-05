@@ -1,8 +1,8 @@
 /*
  * HarmonyOS FreeRDP Main Page
- * 
+ *
  * Home page with bookmark list and quick connect
- * 
+ *
  * Copyright 2026 FreeRDP HarmonyOS Port
  */
 
@@ -21,21 +21,21 @@ const BOOKMARKS_STORE = 'bookmarks';
 struct Index {
   @State bookmarks: BookmarkBase[] = [];
   @State isLoading: boolean = true;
-  @State quickConnectHost: string = '';
+  @State quickConnectHost: string = '192.168.52.127';
   @State quickConnectPort: string = '3389';
-  @State quickConnectUser: string = '';
+  @State quickConnectUser: string = 'administrator';
   @State quickConnectPassword: string = '';
   @State showQuickConnect: boolean = false;
   @State showNativeError: boolean = false;
   @State nativeErrorMessage: string = '';
-  
+
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;
 
   aboutToAppear(): void {
     console.info(`${TAG}: aboutToAppear`);
     this.loadBookmarks();
-    
+
     // Check if native library is loaded
     if (!LibFreeRDP.isNativeLoaded()) {
       const error = LibFreeRDP.getLoadError();
@@ -57,7 +57,7 @@ struct Index {
       this.preferencesHelper = await preferences.getPreferences(this.context, BOOKMARKS_STORE);
       const bookmarksJson = await this.preferencesHelper.get('bookmarks', '[]') as string;
       const bookmarksData = JSON.parse(bookmarksJson) as object[];
-      
+
       this.bookmarks = bookmarksData.map(data => BookmarkBase.fromJson(data));
       console.info(`${TAG}: Loaded ${this.bookmarks.length} bookmarks`);
     } catch (error) {
@@ -73,7 +73,7 @@ struct Index {
    */
   async saveBookmarks(): Promise<void> {
     if (!this.preferencesHelper) return;
-    
+
     try {
       const bookmarksJson = JSON.stringify(this.bookmarks.map(b => b.toJson()));
       await this.preferencesHelper.put('bookmarks', bookmarksJson);
@@ -110,9 +110,9 @@ struct Index {
       this.showNativeError = true;
       return;
     }
-    
+
     console.info(`${TAG}: Connecting to ${bookmark.hostname}:${bookmark.port}`);
-    
+
     router.pushUrl({
       url: 'pages/SessionPage',
       params: {
@@ -131,24 +131,24 @@ struct Index {
       this.showNativeError = true;
       return;
     }
-    
+
     if (!this.quickConnectHost) {
       promptAction.showToast({ message: '请输入主机地址' });
       return;
     }
-    
+
     const bookmark = new QuickConnectBookmark();
     bookmark.hostname = this.quickConnectHost;
     bookmark.port = parseInt(this.quickConnectPort) || 3389;
     bookmark.username = this.quickConnectUser;
     bookmark.password = this.quickConnectPassword;
-    
+
     const errors = bookmark.validate();
     if (errors.length > 0) {
       promptAction.showToast({ message: errors[0] });
       return;
     }
-    
+
     this.connectToBookmark(bookmark);
     this.showQuickConnect = false;
   }
@@ -207,14 +207,14 @@ struct Index {
           .borderRadius(8)
       }
       .margin({ right: 16 })
-      
+
       // Info
       Column() {
         Text(bookmark.getDisplayLabel())
           .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor('#FFFFFF')
-        
+
         Text(bookmark.getConnectionString())
           .fontSize(14)
           .fontColor('#AAAAAA')
@@ -222,7 +222,7 @@ struct Index {
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
-      
+
       // Actions
       Row() {
         Button({ type: ButtonType.Circle }) {
@@ -238,7 +238,7 @@ struct Index {
         .onClick(() => {
           this.editBookmark(bookmark);
         })
-        
+
         Button({ type: ButtonType.Circle }) {
           Image($r('sys.media.ohos_ic_public_cancel'))
             .width(20)
@@ -282,23 +282,23 @@ struct Index {
         .fontWeight(FontWeight.Bold)
         .fontColor('#F44336')
         .margin({ bottom: 16 })
-      
+
       Text('RDP 功能暂时不可用')
         .fontSize(18)
         .fontColor('#FFFFFF')
         .margin({ bottom: 16 })
-      
+
       Text('原因：HarmonyOS 需要使用 musl libc 编译的原生库，当前库使用 glibc 编译。')
         .fontSize(14)
         .fontColor('#AAAAAA')
         .textAlign(TextAlign.Center)
         .margin({ bottom: 12 })
-      
+
       Text('错误详情：')
         .fontSize(14)
         .fontColor('#888888')
         .margin({ bottom: 4 })
-      
+
       Text(this.nativeErrorMessage)
         .fontSize(12)
         .fontColor('#FF9800')
@@ -309,18 +309,18 @@ struct Index {
         .backgroundColor('#2D2D2D')
         .borderRadius(8)
         .margin({ bottom: 24 })
-      
+
       Text('解决方案：')
         .fontSize(14)
         .fontColor('#888888')
         .margin({ bottom: 8 })
-      
+
       Text('1. 使用 HarmonyOS/OHOS NDK 重新编译原生库\n2. 或等待开发者提供兼容版本')
         .fontSize(12)
         .fontColor('#AAAAAA')
         .textAlign(TextAlign.Start)
         .margin({ bottom: 24 })
-      
+
       Button('我知道了')
         .width('100%')
         .height(48)
@@ -343,7 +343,7 @@ struct Index {
         .fontWeight(FontWeight.Bold)
         .fontColor('#FFFFFF')
         .margin({ bottom: 24 })
-      
+
       TextInput({ placeholder: '主机地址', text: this.quickConnectHost })
         .width('100%')
         .height(48)
@@ -354,7 +354,7 @@ struct Index {
         .onChange((value: string) => {
           this.quickConnectHost = value;
         })
-      
+
       TextInput({ placeholder: '端口 (默认 3389)', text: this.quickConnectPort })
         .width('100%')
         .height(48)
@@ -366,7 +366,7 @@ struct Index {
         .onChange((value: string) => {
           this.quickConnectPort = value;
         })
-      
+
       TextInput({ placeholder: '用户名', text: this.quickConnectUser })
         .width('100%')
         .height(48)
@@ -377,7 +377,7 @@ struct Index {
         .onChange((value: string) => {
           this.quickConnectUser = value;
         })
-      
+
       TextInput({ placeholder: '密码', text: this.quickConnectPassword })
         .width('100%')
         .height(48)
@@ -389,7 +389,7 @@ struct Index {
         .onChange((value: string) => {
           this.quickConnectPassword = value;
         })
-      
+
       Row() {
         Button('取消')
           .width('45%')
@@ -398,7 +398,7 @@ struct Index {
           .onClick(() => {
             this.showQuickConnect = false;
           })
-        
+
         Button('连接')
           .width('45%')
           .height(48)
@@ -426,9 +426,9 @@ struct Index {
             .fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor('#FFFFFF')
-          
+
           Blank()
-          
+
           Button({ type: ButtonType.Circle }) {
             Image($r('sys.media.ohos_ic_public_more'))
               .width(24)
@@ -442,7 +442,7 @@ struct Index {
           .onClick(() => {
             this.openSettings();
           })
-          
+
           Button({ type: ButtonType.Circle }) {
             Image($r('sys.media.ohos_ic_public_ok'))
               .width(24)
@@ -458,7 +458,7 @@ struct Index {
         }
         .width('100%')
         .padding({ left: 16, right: 16, top: 16, bottom: 16 })
-        
+
         // Quick connect button
         Button('快速连接')
           .width('calc(100% - 32vp)')
@@ -469,7 +469,7 @@ struct Index {
           .onClick(() => {
             this.showQuickConnect = true;
           })
-        
+
         // Bookmark list
         if (this.isLoading) {
           Column() {
@@ -491,12 +491,12 @@ struct Index {
               .width(80)
               .height(80)
               .fillColor('#666666')
-            
+
             Text('没有保存的连接')
               .fontSize(18)
               .fontColor('#888888')
               .margin({ top: 16 })
-            
+
             Text('点击"+"添加新连接')
               .fontSize(14)
               .fontColor('#666666')
@@ -517,7 +517,7 @@ struct Index {
           .layoutWeight(1)
           .padding({ left: 16, right: 16 })
         }
-        
+
         // Add bookmark FAB
         Button({ type: ButtonType.Circle }) {
           Image($r('sys.media.ohos_ic_public_add'))
@@ -538,7 +538,7 @@ struct Index {
       .width('100%')
       .height('100%')
       .backgroundColor('#121212')
-      
+
       // Quick connect dialog overlay
       if (this.showQuickConnect) {
         Column() {
@@ -552,7 +552,7 @@ struct Index {
           this.showQuickConnect = false;
         })
       }
-      
+
       // Native error dialog overlay
       if (this.showNativeError) {
         Column() {

@@ -27,18 +27,18 @@ struct SettingsPage {
   @State defaultColorDepth: string = '32';
   
   // Performance settings
-  @State enableRemoteFX: boolean = true;
-  @State enableGfx: boolean = true;
-  @State enableH264: boolean = true;
+  @State enableRemoteFX: boolean = false;
+  @State enableGfx: boolean = false;
+  @State enableH264: boolean = false;
   
   // Network settings
-  @State tcpKeepaliveEnabled: boolean = true;
+  @State tcpKeepaliveEnabled: boolean = false;
   @State tcpKeepaliveInterval: number = 15;
   @State heartbeatInterval: number = 30;
   
   // Debug settings
-  @State debugLevel: string = 'WARN';
-  @State showDebugInfo: boolean = false;
+  @State debugLevel: string = 'INFO';
+  @State showDebugInfo: boolean = true;
   
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;
