@@ -1,4 +1,37 @@
 {
+  "HVIGOR": {
+    "IS_INCREMENTAL": true,
+    "IS_DAEMON": true,
+    "IS_PARALLEL": true,
+    "IS_HVIGORFILE_TYPE_CHECK": false,
+    "TASK_TIME": {
+      "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf": {
+        "CreateModuleInfo": 650400,
+        "ConfigureCmake": 31963900,
+        "PreCheckSyscap": 347200,
+        "ProcessIntegratedHsp": 626900,
+        "BuildNativeWithCmake": 6196600,
+        "SyscapTransform": 1587200,
+        "ProcessStartupConfig": 1552000,
+        "BuildJS": 1946300,
+        "BuildNativeWithNinja": 126143700,
+        "ProcessCompiledResources": 508600,
+        "PackingCheck": 2798100,
+        "CollectDebugSymbol": 716200,
+        "assembleHap": 199500
+      }
+    },
+    "APIS": [
+      "getProperty"
+    ],
+    "CONFIG_EXPERIMENT": {
+      "ENABLE_MODULE_SKIP": false,
+      "ENABLE_CPP_FUNCTION_LEVEL_INCREMENTAL": false
+    },
+    "CONFIG_PROPERTIES": {},
+    "TOTAL_TIME": 560120400,
+    "BUILD_ID": "202603110019204690"
+  },
   "HVIGOR_OHOS_PLUGIN": {
     "MODULES": [
       {
@@ -8,42 +41,13 @@
         "IS_COMMAND_LINE_ENTRY_MODULE": true,
         "MODULE_TYPE": "entry",
         "INCREMENTAL_TASKS": {
-          "BUILD_NATIVE_WITH_CMAKE": false
+          "BUILD_NATIVE_WITH_CMAKE": true
         },
-        "IS_INCREMENTAL_MODULE": false
+        "IS_INCREMENTAL_MODULE": true
       }
     ],
     "NATIVE_COMPILER": "Default",
-    "IS_FULL_BUILD": true,
-    "BUILD_MODE": "debug",
-    "USE_NORMALIZED_OHMURL": true
-  },
-  "HVIGOR": {
-    "IS_INCREMENTAL": true,
-    "IS_DAEMON": true,
-    "IS_PARALLEL": true,
-    "IS_HVIGORFILE_TYPE_CHECK": false,
-    "TASK_TIME": {
-      "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf": {
-        "clean": 1791200,
-        "init": 461800,
-        "PreBuild": 186377700,
-        "ConfigureCmake": 32163200,
-        "BuildNativeWithCmake": 5605850700,
-        "compileNative": 361900
-      },
-      "APP": {
-        "clean": 485000,
-        "init": 422100
-      }
-    },
-    "APIS": [],
-    "CONFIG_EXPERIMENT": {
-      "ENABLE_MODULE_SKIP": false,
-      "ENABLE_CPP_FUNCTION_LEVEL_INCREMENTAL": false
-    },
-    "CONFIG_PROPERTIES": {},
-    "BUILD_ID": "202603051950334010",
-    "TOTAL_TIME": 6054612800
+    "IS_FULL_BUILD": false,
+    "BUILD_MODE": "debug"
   }
 }

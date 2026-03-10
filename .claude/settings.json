@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/MyWork/GitCode/freerdp-harmonyos/**)",
+      "Read(//d/MyWork/GitCode/freerdp-harmonyos/**)",
+      "Bash(ls D:/MyWork/GitCode/freerdp-harmonyos/*.ps1)",
+      "Read(//c/Users/tony/.ohos/config/**)",
+      "Bash(*)",
+      "Bash(node --version)",
+      "Bash(C:/Users/tony/.nvm/nodejs/node.exe --version)",
+      "Bash(\"/c/Program Files/Huawei/DevEco Studio/tools/hvigor/bin/hvigorw\" assembleHap --mode module -p module=entry@default -p product=default -p buildMode=debug)",
+      "Read(//c/Users/tony/AppData/Local/Huawei/Sdk/**)",
+      "Read(*)",
+      "Read(//c/Program Files/Huawei/DevEco Studio//**)",
+      "Bash(cmd.exe /c \"dir C:\\\\Program Files\\\\Huawei\\\\DevEco*\")",
+      "Bash(powershell.exe -Command \":*)",
+      "Read(//c/Users/tony/AppData/Roaming/Huawei/DevEcoStudio6.0//**)",
+      "Bash(powershell.exe -NonInteractive -Command \":*)",
+      "Read(//d/MyWork//**)",
+      "Read(//c/Users/tony/AppData/Local/Huawei/DevEcoStudio6.0/projects/freerdp-harmonyos.2b874086/**)",
+      "Read(//c/Users/tony/**)",
+      "Bash(# Look directly for the hvigorw build tool in oh_modules and node_modules ls node_modules/.bin/)",
+      "Bash(\"/c/Program Files/Huawei/DevEco Studio/tools/ohpm/bin/ohpm\" config get sdk)",
+      "Bash(\"/c/Program Files/Huawei/DevEco Studio/tools/ohpm/bin/ohpm\" --version)",
+      "Bash(powershell.exe -NonInteractive -Command \"Get-ChildItem ''C:\\\\Program Files\\\\Huawei\\\\DevEco Studio\\\\sdk\\\\default\\\\openharmony'' -ErrorAction SilentlyContinue | Select Name\")",
+      "Bash(export DEVECO_SDK_HOME=\"C:/Program Files/Huawei/DevEco Studio/sdk\")",
+      "Bash(ls D:/MyWork/GitCode/freerdp-harmonyos/*.cmd)",
+      "Bash(ls D:/MyWork/GitCode/freerdp-harmonyos/*.bat)",
+      "Bash(cmd.exe /c \"build_windows.cmd debug\")",
+      "Bash(cmd.exe /c \"cd /d D:\\\\MyWork\\\\GitCode\\\\freerdp-harmonyos && build_windows.cmd debug 2>&1\")",
+      "Bash(cmd.exe /c \"D:\\\\MyWork\\\\GitCode\\\\freerdp-harmonyos\\\\build_windows.cmd debug 2>&1\")",
+      "Bash(echo \"exit: $?\")"
+    ]
+  }
+}
