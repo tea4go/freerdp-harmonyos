@@ -1,8 +1,8 @@
 /*
  * HarmonyOS FreeRDP Bookmark Edit Page
- * 
+ *
  * Page for creating and editing bookmarks
- * 
+ *
  * Copyright 2026 FreeRDP HarmonyOS Port
  */
 
@@ -50,26 +50,26 @@ interface SoundOption {
 struct BookmarkPage {
   @State mode: string = 'create';
   @State bookmark: BookmarkBase = new ManualBookmark();
-  
+
   // Basic settings
   @State label: string = '192.168.52.127';
   @State hostname: string = '192.168.52.127';
   @State port: string = '3389';
   @State username: string = 'administrator';
   @State domain: string = '';
-  @State password: string = '7f2668';
-  
+  @State password: string = 'testing123';
+
   // Screen settings
   @State screenWidth: string = '1920';
   @State screenHeight: string = '1080';
   @State colorDepth: string = '32';
-  
+
   // Advanced settings
   @State consoleMode: boolean = false;
   @State security: number = 0;
   @State redirectSound: number = 0;
   @State redirectMicrophone: boolean = false;
-  
+
   // Performance settings
   @State remoteFX: boolean = true;
   @State gfx: boolean = true;
@@ -77,14 +77,14 @@ struct BookmarkPage {
   @State wallpaper: boolean = false;
   @State theming: boolean = true;
   @State fontSmoothing: boolean = true;
-  
+
   // Gateway settings
   @State gatewayEnabled: boolean = false;
   @State gatewayHostname: string = '';
   @State gatewayPort: string = '443';
   @State gatewayUsername: string = '';
   @State gatewayPassword: string = '';
-  
+
   // UI state
   @State currentTab: number = 0;
 
@@ -125,11 +125,11 @@ struct BookmarkPage {
 
   aboutToAppear(): void {
     console.info(`${TAG}: aboutToAppear`);
-    
+
     const params = router.getParams() as BookmarkPageParams;
     if (params) {
       this.mode = params.mode || 'create';
-      
+
       if (params.bookmark) {
         this.bookmark = BookmarkBase.fromJson(params.bookmark);
         this.loadFromBookmark();
@@ -147,23 +147,23 @@ struct BookmarkPage {
     this.username = this.bookmark.username;
     this.domain = this.bookmark.domain;
     this.password = this.bookmark.password;
-    
+
     this.screenWidth = this.bookmark.screenSettings.width.toString();
     this.screenHeight = this.bookmark.screenSettings.height.toString();
     this.colorDepth = this.bookmark.screenSettings.colors.toString();
-    
+
     this.consoleMode = this.bookmark.advancedSettings.consoleMode;
     this.security = this.bookmark.advancedSettings.security;
     this.redirectSound = this.bookmark.advancedSettings.redirectSound;
     this.redirectMicrophone = this.bookmark.advancedSettings.redirectMicrophone;
-    
+
     this.remoteFX = this.bookmark.performanceFlags.remoteFX;
     this.gfx = this.bookmark.performanceFlags.gfx;
     this.h264 = this.bookmark.performanceFlags.h264;
     this.wallpaper = this.bookmark.performanceFlags.wallpaper;
     this.theming = this.bookmark.performanceFlags.theming;
     this.fontSmoothing = this.bookmark.performanceFlags.fontSmoothing;
-    
+
     this.gatewayEnabled = this.bookmark.gatewaySettings.enabled;
     this.gatewayHostname = this.bookmark.gatewaySettings.hostname;
     this.gatewayPort = this.bookmark.gatewaySettings.port.toString();
@@ -181,23 +181,23 @@ struct BookmarkPage {
     this.bookmark.username = this.username;
     this.bookmark.domain = this.domain;
     this.bookmark.password = this.password;
-    
+
     this.bookmark.screenSettings.width = parseInt(this.screenWidth) || 1920;
     this.bookmark.screenSettings.height = parseInt(this.screenHeight) || 1080;
     this.bookmark.screenSettings.colors = parseInt(this.colorDepth) || 32;
-    
+
     this.bookmark.advancedSettings.consoleMode = this.consoleMode;
     this.bookmark.advancedSettings.security = this.security;
     this.bookmark.advancedSettings.redirectSound = this.redirectSound;
     this.bookmark.advancedSettings.redirectMicrophone = this.redirectMicrophone;
-    
+
     this.bookmark.performanceFlags.remoteFX = this.remoteFX;
     this.bookmark.performanceFlags.gfx = this.gfx;
     this.bookmark.performanceFlags.h264 = this.h264;
     this.bookmark.performanceFlags.wallpaper = this.wallpaper;
     this.bookmark.performanceFlags.theming = this.theming;
     this.bookmark.performanceFlags.fontSmoothing = this.fontSmoothing;
-    
+
     this.bookmark.gatewaySettings.enabled = this.gatewayEnabled;
     this.bookmark.gatewaySettings.hostname = this.gatewayHostname;
     this.bookmark.gatewaySettings.port = parseInt(this.gatewayPort) || 443;
@@ -210,13 +210,13 @@ struct BookmarkPage {
    */
   private save(): void {
     this.saveToBookmark();
-    
+
     const errors = this.bookmark.validate();
     if (errors.length > 0) {
       promptAction.showToast({ message: errors[0] });
       return;
     }
-    
+
     // Return bookmark to previous page
     router.back({
       url: 'pages/Index',
@@ -227,14 +227,14 @@ struct BookmarkPage {
   }
 
   @Builder
-  InputField(label: string, value: string, placeholder: string, 
+  InputField(label: string, value: string, placeholder: string,
              onChange: (value: string) => void, inputType: InputType = InputType.Normal) {
     Column() {
       Text(label)
         .fontSize(14)
         .fontColor('#AAAAAA')
         .margin({ bottom: 8 })
-      
+
       TextInput({ placeholder: placeholder, text: value })
         .width('100%')
         .height(48)
@@ -257,7 +257,7 @@ struct BookmarkPage {
         .fontSize(16)
         .fontColor('#FFFFFF')
         .layoutWeight(1)
-      
+
       Toggle({ type: ToggleType.Switch, isOn: value })
         .selectedColor('#2196F3')
         .onChange(onChange)
@@ -270,22 +270,22 @@ struct BookmarkPage {
   BasicSettingsTab() {
     Scroll() {
       Column() {
-        this.InputField('连接名称', this.label, '可选，用于显示', 
+        this.InputField('连接名称', this.label, '可选，用于显示',
           (v) => { this.label = v; })
-        
-        this.InputField('主机地址', this.hostname, '例如: 192.168.1.100', 
+
+        this.InputField('主机地址', this.hostname, '例如: 192.168.1.100',
           (v) => { this.hostname = v; })
-        
-        this.InputField('端口', this.port, '默认: 3389', 
+
+        this.InputField('端口', this.port, '默认: 3389',
           (v) => { this.port = v; }, InputType.Number)
-        
-        this.InputField('用户名', this.username, '登录用户名', 
+
+        this.InputField('用户名', this.username, '登录用户名',
           (v) => { this.username = v; })
-        
-        this.InputField('域', this.domain, '可选', 
+
+        this.InputField('域', this.domain, '可选',
           (v) => { this.domain = v; })
-        
-        this.InputField('密码', this.password, '登录密码', 
+
+        this.InputField('密码', this.password, '登录密码',
           (v) => { this.password = v; }, InputType.Password)
       }
       .padding(16)
@@ -298,17 +298,17 @@ struct BookmarkPage {
   ScreenSettingsTab() {
     Scroll() {
       Column() {
-        this.InputField('宽度', this.screenWidth, '默认: 1920', 
+        this.InputField('宽度', this.screenWidth, '默认: 1920',
           (v) => { this.screenWidth = v; }, InputType.Number)
-        
-        this.InputField('高度', this.screenHeight, '默认: 1080', 
+
+        this.InputField('高度', this.screenHeight, '默认: 1080',
           (v) => { this.screenHeight = v; }, InputType.Number)
-        
+
         Text('颜色深度')
           .fontSize(14)
           .fontColor('#AAAAAA')
           .margin({ bottom: 8 })
-        
+
         Row() {
           ForEach(['16', '24', '32'], (depth: string) => {
             Button(depth + ' 位')
@@ -322,12 +322,12 @@ struct BookmarkPage {
         .width('100%')
         .justifyContent(FlexAlign.SpaceEvenly)
         .margin({ bottom: 16 })
-        
+
         Text('预设分辨率')
           .fontSize(14)
           .fontColor('#AAAAAA')
           .margin({ top: 16, bottom: 8 })
-        
+
         Column() {
           ForEach(this.getResolutionPresets(), (preset: ResolutionPreset) => {
             Button(preset.label)
@@ -352,16 +352,16 @@ struct BookmarkPage {
   AdvancedSettingsTab() {
     Scroll() {
       Column() {
-        this.SwitchField('控制台/管理员会话', this.consoleMode, 
+        this.SwitchField('控制台/管理员会话', this.consoleMode,
           (v) => { this.consoleMode = v; })
-        
+
         Divider().color('#333333')
-        
+
         Text('安全协议')
           .fontSize(14)
           .fontColor('#AAAAAA')
           .margin({ top: 16, bottom: 8 })
-        
+
         Row() {
           ForEach(this.getSecurityOptions(), (opt: SecurityOption) => {
             Button(opt.label)
@@ -375,14 +375,14 @@ struct BookmarkPage {
         }
         .width('100%')
         .margin({ bottom: 16 })
-        
+
         Divider().color('#333333')
-        
+
         Text('音频重定向')
           .fontSize(14)
           .fontColor('#AAAAAA')
           .margin({ top: 16, bottom: 8 })
-        
+
         Row() {
           ForEach(this.getSoundOptions(), (opt: SoundOption) => {
             Button(opt.label)
@@ -395,28 +395,28 @@ struct BookmarkPage {
         }
         .width('100%')
         .margin({ bottom: 16 })
-        
-        this.SwitchField('麦克风重定向', this.redirectMicrophone, 
+
+        this.SwitchField('麦克风重定向', this.redirectMicrophone,
           (v) => { this.redirectMicrophone = v; })
-        
+
         Divider().color('#333333')
-        
+
         Text('性能优化')
           .fontSize(14)
           .fontColor('#AAAAAA')
           .margin({ top: 16, bottom: 8 })
-        
-        this.SwitchField('RemoteFX', this.remoteFX, 
+
+        this.SwitchField('RemoteFX', this.remoteFX,
           (v) => { this.remoteFX = v; })
-        this.SwitchField('GFX 管道', this.gfx, 
+        this.SwitchField('GFX 管道', this.gfx,
           (v) => { this.gfx = v; })
-        this.SwitchField('H.264 编码', this.h264, 
+        this.SwitchField('H.264 编码', this.h264,
           (v) => { this.h264 = v; })
-        this.SwitchField('显示壁纸', this.wallpaper, 
+        this.SwitchField('显示壁纸', this.wallpaper,
           (v) => { this.wallpaper = v; })
-        this.SwitchField('视觉主题', this.theming, 
+        this.SwitchField('视觉主题', this.theming,
           (v) => { this.theming = v; })
-        this.SwitchField('字体平滑', this.fontSmoothing, 
+        this.SwitchField('字体平滑', this.fontSmoothing,
           (v) => { this.fontSmoothing = v; })
       }
       .padding(16)
@@ -429,22 +429,22 @@ struct BookmarkPage {
   GatewaySettingsTab() {
     Scroll() {
       Column() {
-        this.SwitchField('启用 RD 网关', this.gatewayEnabled, 
+        this.SwitchField('启用 RD 网关', this.gatewayEnabled,
           (v) => { this.gatewayEnabled = v; })
-        
+
         if (this.gatewayEnabled) {
           Divider().color('#333333').margin({ top: 8, bottom: 16 })
-          
-          this.InputField('网关主机', this.gatewayHostname, '网关服务器地址', 
+
+          this.InputField('网关主机', this.gatewayHostname, '网关服务器地址',
             (v) => { this.gatewayHostname = v; })
-          
-          this.InputField('网关端口', this.gatewayPort, '默认: 443', 
+
+          this.InputField('网关端口', this.gatewayPort, '默认: 443',
             (v) => { this.gatewayPort = v; }, InputType.Number)
-          
-          this.InputField('网关用户名', this.gatewayUsername, '网关登录用户', 
+
+          this.InputField('网关用户名', this.gatewayUsername, '网关登录用户',
             (v) => { this.gatewayUsername = v; })
-          
-          this.InputField('网关密码', this.gatewayPassword, '网关登录密码', 
+
+          this.InputField('网关密码', this.gatewayPassword, '网关登录密码',
             (v) => { this.gatewayPassword = v; }, InputType.Password)
         }
       }
@@ -468,14 +468,14 @@ struct BookmarkPage {
         .height(44)
         .backgroundColor('transparent')
         .onClick(() => { router.back(); })
-        
+
         Text(this.mode === 'create' ? '新建连接' : '编辑连接')
           .fontSize(20)
           .fontWeight(FontWeight.Medium)
           .fontColor('#FFFFFF')
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-        
+
         Button('保存')
           .height(36)
           .backgroundColor('#2196F3')
@@ -483,24 +483,24 @@ struct BookmarkPage {
       }
       .width('100%')
       .padding({ left: 8, right: 16, top: 8, bottom: 8 })
-      
+
       // Tabs
       Tabs({ barPosition: BarPosition.Start }) {
         TabContent() {
           this.BasicSettingsTab()
         }
         .tabBar('基本')
-        
+
         TabContent() {
           this.ScreenSettingsTab()
         }
         .tabBar('屏幕')
-        
+
         TabContent() {
           this.AdvancedSettingsTab()
         }
         .tabBar('高级')
-        
+
         TabContent() {
           this.GatewaySettingsTab()
         }

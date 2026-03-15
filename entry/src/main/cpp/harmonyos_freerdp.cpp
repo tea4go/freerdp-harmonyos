@@ -1,9 +1,9 @@
 /*
  * HarmonyOS FreeRDP Native Implementation
- * 
+ *
  * Copyright 2026 FreeRDP HarmonyOS Port
  * Based on Android FreeRDP implementation
- * 
+ *
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
  * If a copy of the MPL was not distributed with this file, You can obtain one at
  * http://mozilla.org/MPL/2.0/.
@@ -126,39 +126,39 @@ void harmonyos_set_verify_certificate_callback(OnVerifyCertificateCallback callb
 static int identify_cursor_type(rdpPointer* pointer) {
     if (!pointer)
         return CURSOR_TYPE_UNKNOWN;
-    
+
     UINT32 width = pointer->width;
     UINT32 height = pointer->height;
     UINT32 xPos = pointer->xPos;
     UINT32 yPos = pointer->yPos;
-    
+
     if (width == 32 && height == 32 && xPos < 5 && yPos < 5)
         return CURSOR_TYPE_DEFAULT;
-    
+
     if (width == 32 && height == 32 && xPos >= 10 && xPos <= 16 && yPos >= 5 && yPos <= 10)
         return CURSOR_TYPE_HAND;
-    
+
     if (width <= 12 && height >= 16 && xPos <= 6)
         return CURSOR_TYPE_IBEAM;
-    
+
     if (width <= 20 && height >= 24 && xPos >= width/2 - 3 && xPos <= width/2 + 3) {
         if (height > width * 1.2)
             return CURSOR_TYPE_SIZE_NS;
     }
-    
+
     if (height <= 20 && width >= 24 && yPos >= height/2 - 3 && yPos <= height/2 + 3) {
         if (width > height * 1.2)
             return CURSOR_TYPE_SIZE_WE;
     }
-    
-    if (width >= 24 && height >= 24 && 
+
+    if (width >= 24 && height >= 24 &&
         xPos >= width/2 - 4 && xPos <= width/2 + 4 &&
         yPos >= height/2 - 4 && yPos <= height/2 + 4)
         return CURSOR_TYPE_CROSS;
-    
+
     if (width == 32 && height == 32)
         return CURSOR_TYPE_WAIT;
-    
+
     return CURSOR_TYPE_UNKNOWN;
 }
 
@@ -259,35 +259,35 @@ static BOOL harmonyos_end_paint(rdpContext* context) {
         y2 = MAX(y2, cinvalid[i].y + cinvalid[i].h);
     }
 
-    /* 
-     * ANDROID-STYLE END_PAINT: 
+    /*
+     * ANDROID-STYLE END_PAINT:
      * Do NOT perform memcpy in native thread - this causes crashes!
      * Following Android implementation: just notify ArkTS of the update region.
      * ArkTS will handle the actual graphics data copy in its own thread.
-     * 
+     *
      * This avoids:
      * 1. Thread safety issues with ArrayBuffer access
      * 2. Potential race conditions with PixelMap lifecycle
      * 3. Native thread blocking on complex memory operations
      */
-    
+
     // Debug log (only first 5 frames)
     static int frameCount = 0;
     if (frameCount < 5) {
-        LOGI("harmonyos_end_paint: frame=%d, region=[%d,%d,%d,%d], gdi=%dx%d", 
+        LOGI("harmonyos_end_paint: frame=%d, region=[%d,%d,%d,%d], gdi=%dx%d",
              frameCount, x1, y1, x2-x1, y2-y1, gdi->width, gdi->height);
         frameCount++;
     }
-    
-    /* 
+
+    /*
      * TODO: Re-enable g_onGraphicsUpdate once we implement Android-style
      * graphics copy in ArkTS layer (using a dedicated N-API getter function)
      */
     // if (g_onGraphicsUpdate) {
     //     g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
     // }
-    
-    LOGD("harmonyos_end_paint: Graphics update region calculated, memcpy skipped (Android-style)");
+
+    //LOGD("harmonyos_end_paint: Graphics update region calculated, memcpy skipped (Android-style)");
 
     hwnd->invalid->null = TRUE;
     hwnd->ninvalid = 0;
@@ -323,7 +323,7 @@ static BOOL harmonyos_pre_connect(freerdp* instance) {
         LOGE("harmonyos_pre_connect: instance is NULL");
         return FALSE;
     }
-    
+
     context = instance->context;
     if (!context) {
         LOGE("harmonyos_pre_connect: context is NULL");
@@ -338,7 +338,7 @@ static BOOL harmonyos_pre_connect(freerdp* instance) {
 
     LOGI("harmonyos_pre_connect: Settings validated, proceeding...");
 
-    /* 
+    /*
      * 注意：移除了对 settings 字符串的手动提取和打印。
      * 在某些 FreeRDP 版本中，如果在 pre_connect 阶段 settings 尚未完全同步，
      * 访问这些字段可能导致不稳定的行为甚至崩溃。
@@ -364,7 +364,7 @@ static BOOL harmonyos_pre_connect(freerdp* instance) {
     if (g_onPreConnect) {
         g_onPreConnect((int64_t)(uintptr_t)instance);
     }
-    
+
     LOGI("harmonyos_pre_connect: returning TRUE");
     return TRUE;
 }
@@ -388,7 +388,7 @@ static BOOL harmonyos_Pointer_Set(rdpContext* context, rdpPointer* pointer) {
         return FALSE;
 
     int cursorType = identify_cursor_type(pointer);
-    
+
     freerdp* instance = context->instance;
     if (instance && g_onCursorTypeChanged) {
         g_onCursorTypeChanged((int64_t)(uintptr_t)instance, cursorType);
@@ -408,7 +408,7 @@ static BOOL harmonyos_Pointer_SetNull(rdpContext* context) {
     if (!context)
         return FALSE;
     LOGD("Pointer_SetNull");
-    
+
     freerdp* instance = context->instance;
     if (instance && g_onCursorTypeChanged) {
         g_onCursorTypeChanged((int64_t)(uintptr_t)instance, CURSOR_TYPE_UNKNOWN);
@@ -420,7 +420,7 @@ static BOOL harmonyos_Pointer_SetDefault(rdpContext* context) {
     if (!context)
         return FALSE;
     LOGD("Pointer_SetDefault");
-    
+
     freerdp* instance = context->instance;
     if (instance && g_onCursorTypeChanged) {
         g_onCursorTypeChanged((int64_t)(uintptr_t)instance, CURSOR_TYPE_DEFAULT);
@@ -494,15 +494,15 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     update->DesktopResize = harmonyos_desktop_resize;
     LOGI("harmonyos_post_connect: Update callbacks set");
 
-    /* 
+    /*
      * CRITICAL: Temporarily bypass ArkTS callbacks to isolate the crash.
      * The crash occurs immediately after "Update callbacks set" when calling
      * either g_onSettingsChanged or g_onConnectionSuccess.
-     * 
+     *
      * TODO: Debug TSFN implementation or callback parameters.
      */
     LOGI("harmonyos_post_connect: Skipping ArkTS callbacks to test connection stability");
-    
+
     LOGI("harmonyos_post_connect: EXIT - connection established (UI not notified)");
     return TRUE;
 }
@@ -510,20 +510,20 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
 /* Post-disconnect callback */
 static void harmonyos_post_disconnect(freerdp* instance) {
     LOGI("harmonyos_post_disconnect: ENTER");
-    
+
     /* 尝试获取更多断开原因的信息 */
     if (instance && instance->context) {
         UINT32 errorCode = freerdp_get_last_error(instance->context);
         const char* errorString = freerdp_get_last_error_string(errorCode);
-        LOGI("harmonyos_post_disconnect: ErrorCode=0x%{public}X Msg=%{public}s", 
+        LOGI("harmonyos_post_disconnect: ErrorCode=0x%{public}X Msg=%{public}s",
              (unsigned int)errorCode, errorString ? errorString : "NULL");
     }
-    
+
     if (g_onDisconnecting) {
         g_onDisconnecting((int64_t)(uintptr_t)instance);
     }
     gdi_free(instance);
-    
+
     LOGI("harmonyos_post_disconnect: EXIT");
 }
 
@@ -552,7 +552,7 @@ static DWORD harmonyos_verify_certificate_ex(freerdp* instance, const char* host
         return g_onVerifyCertificate((int64_t)(uintptr_t)instance, host, port,
                                      common_name, subject, issuer, fingerprint, flags);
     }
-    
+
     // Default: accept certificate
     return 1;
 }
@@ -584,7 +584,7 @@ static void update_network_activity(void) {
 static BOOL is_network_alive(void) {
     if (g_lastNetworkActivityTime == 0)
         return TRUE; /* Not initialized yet */
-    
+
     UINT64 elapsed = GetTickCount64() - g_lastNetworkActivityTime;
     return elapsed < NETWORK_TIMEOUT_MS;
 }
@@ -616,40 +616,40 @@ static int harmonyos_freerdp_run(freerdp* instance) {
         }
 
         count += tmp;
-        
+
         /* In background mode, use timeout to periodically check connection health */
         if (g_isInBackgroundMode) {
             waitTimeout = BACKGROUND_KEEPALIVE_INTERVAL_MS;
         } else {
             waitTimeout = INFINITE;
         }
-        
+
         status = WaitForMultipleObjects(count, handles, FALSE, waitTimeout);
 
         if (status == WAIT_FAILED) {
             LOGE("WaitForMultipleObjects failed with %u [%08X]", status, (unsigned int)GetLastError());
             break;
         }
-        
+
         if (status == WAIT_TIMEOUT) {
             /* Timeout in background mode - check connection health */
             if (g_isInBackgroundMode) {
                 consecutiveTimeouts++;
                 LOGD("Background keepalive check (%d/%d)", consecutiveTimeouts, MAX_CONSECUTIVE_TIMEOUTS);
-                
+
                 /* Check if network is still alive */
                 if (!is_network_alive()) {
                     LOGW("Network timeout detected in background mode");
                     break;
                 }
-                
+
                 /* Too many consecutive timeouts might indicate connection issue */
                 if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
                     LOGW("Too many consecutive timeouts, checking connection...");
                     /* Reset counter but don't break - let FreeRDP handle it */
                     consecutiveTimeouts = 0;
                 }
-                
+
                 continue; /* Continue waiting */
             }
         } else {
@@ -696,7 +696,7 @@ static DWORD WINAPI harmonyos_thread_func(LPVOID param) {
     UINT64 connectEndTime = 0;
     UINT64 connectDuration = 0;
     int savedErrno = 0;
-    
+
     LOGD("Start...");
 
     /* 安全检查 - 不使用 WINPR_ASSERT 避免 abort */
@@ -708,7 +708,7 @@ static DWORD WINAPI harmonyos_thread_func(LPVOID param) {
         LOGE("harmonyos_thread_func: context is NULL");
         goto fail;
     }
-    
+
     context = instance->context;
 
     if (freerdp_client_start(context) != CHANNEL_RC_OK) {
@@ -718,84 +718,84 @@ static DWORD WINAPI harmonyos_thread_func(LPVOID param) {
 
     LOGI("Connect... (attempt 1)");
     LOGI("Checking instance validity...");
-    
+
     if (!instance) {
         LOGE("instance became NULL!");
         goto fail;
     }
-    
+
     LOGI("instance=%{public}p", (void*)instance);
     LOGI("context=%{public}p", (void*)instance->context);
-    
+
     if (!instance->context) {
         LOGE("context is NULL before connect!");
         goto fail;
     }
-    
+
     if (!instance->context->settings) {
         LOGE("settings is NULL before connect!");
         goto fail;
     }
-    
+
     LOGI("PreConnect callback=%{public}p", (void*)instance->PreConnect);
     LOGI("PostConnect callback=%{public}p", (void*)instance->PostConnect);
-    
+
     LOGI("Calling freerdp_connect NOW...");
 
     /* 清除 errno 以便准确捕获连接错误 */
     errno = 0;
-    
+
     /* 记录连接开始时间 */
     connectStartTime = GetTickCount64();
-    
+
     connectResult = freerdp_connect(instance);
-    
+
     /* 立即保存 errno，避免被后续调用覆盖 */
     savedErrno = errno;
-    
+
     /* 计算连接耗时 */
     connectEndTime = GetTickCount64();
     connectDuration = connectEndTime - connectStartTime;
-    
-    LOGI("freerdp_connect returned: %{public}s (took %{public}llu ms)", 
+
+    LOGI("freerdp_connect returned: %{public}s (took %{public}llu ms)",
          connectResult ? "TRUE" : "FALSE", (unsigned long long)connectDuration);
-    
+
     /* 如果失败，打印 errno */
     if (!connectResult) {
-        LOGE("errno=%{public}d (%{public}s)", savedErrno, 
+        LOGE("errno=%{public}d (%{public}s)", savedErrno,
              savedErrno ? strerror(savedErrno) : "No error");
-        
+
         /* 如果连接时间很短（<100ms），说明可能是配置或初始化错误 */
         if (connectDuration < 100) {
             LOGE("Connection failed very quickly - likely config/init error, not network");
         }
     }
-    
+
     if (!connectResult) {
         status = GetLastError();
-        
+
         /* 获取详细错误信息 */
         UINT32 errorCode = freerdp_get_last_error(context);
         const char* errorString = freerdp_get_last_error_string(errorCode);
         const char* errorCategory = freerdp_get_last_error_category(errorCode);
-        
+
         /* 使用 {public} 标记避免隐私过滤 */
         LOGE("Connection failed! GetLastError=0x%{public}08X", status);
         LOGE("FreeRDP ErrorCode=0x%{public}08X", errorCode);
         LOGE("FreeRDP Category=%{public}s", errorCategory ? errorCategory : "Unknown");
         LOGE("FreeRDP Message=%{public}s", errorString ? errorString : "No error message");
-        
+
         /* 分类错误类型 */
         const char* errorType = "UNKNOWN";
         UINT32 errorType_id = errorCode & 0xFFFF;
-        
+
         if (errorCode == 0) {
             errorType = "INTERNAL_ERROR";
             LOGE("Error Type: %{public}s - Internal error", errorType);
         } else if (errorType_id >= 0x0005 && errorType_id <= 0x0007) {
             errorType = "NETWORK_ERROR";
             LOGE("Error Type: %{public}s - Check host address and port", errorType);
-        } else if (errorType_id == 0x0009 || errorType_id == 0x000F || 
+        } else if (errorType_id == 0x0009 || errorType_id == 0x000F ||
                    (errorType_id >= 0x0010 && errorType_id <= 0x001F)) {
             errorType = "AUTH_ERROR";
             LOGE("Error Type: %{public}s - Check username and password", errorType);
@@ -806,8 +806,8 @@ static DWORD WINAPI harmonyos_thread_func(LPVOID param) {
             errorType = "CONNECTION_ERROR";
             LOGE("Error Type: %{public}s - General connection failure", errorType);
         }
-        
-        /* 
+
+        /*
          * 关键修复：禁用 Native 层重连。
          * 让 ArkTS 层统一处理连接生命周期，避免多个实例抢占会话。
          */
@@ -816,16 +816,16 @@ static DWORD WINAPI harmonyos_thread_func(LPVOID param) {
     } else {
         /* Connection successful */
         freerdp_client_set_connected(context, TRUE);
-        
+
         status = harmonyos_freerdp_run(instance);
         LOGD("Run loop exited with status: %08X", status);
-        
+
         freerdp_client_set_connected(context, FALSE);
 
         if (!freerdp_disconnect(instance)) {
             LOGE("Disconnect failed");
         }
-        
+
         /* 连接丢失后也直接返回，由上层重连 */
         LOGI("Session ended. Reporting to ArkTS.");
     }
@@ -919,12 +919,12 @@ int64_t freerdp_harmonyos_new(void) {
     rdpContext* ctx;
 
     setlocale(LC_ALL, "");
-    
+
     /* 初始化 OpenSSL（只需要做一次） */
     if (!g_sslInitialized) {
         LOGI("freerdp_harmonyos_new: Initializing SSL...");
-        
-        /* 
+
+        /*
          * 针对 HarmonyOS 的重要修复：
          * 1. 设置 HOME 环境变量到应用沙箱目录，防止 FreeRDP 尝试在沙箱外创建配置目录。
          * 2. 显式清除 OpenSSL 模块路径环境变量，防止其尝试访问编译机路径 (/home/runner/work/...)
@@ -933,7 +933,7 @@ int64_t freerdp_harmonyos_new(void) {
         unsetenv("OPENSSL_MODULES");
         unsetenv("OPENSSL_CONF");
         unsetenv("OPENSSL_ENGINES");
-        
+
         /* 使用 winpr 的 SSL 初始化函数 */
         if (winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT)) {
             LOGI("freerdp_harmonyos_new: SSL initialized successfully");
@@ -969,8 +969,8 @@ void freerdp_harmonyos_free(int64_t instance) {
 
     if (inst->context) {
         LOGI("freerdp_harmonyos_free: freeing client context and instance");
-        /* 
-         * CRITICAL: 在 FreeRDP 中，freerdp_client_context_free 
+        /*
+         * CRITICAL: 在 FreeRDP 中，freerdp_client_context_free
          * 会释放 context 及其关联的 instance (如果它是所有者)。
          */
         freerdp_client_context_free(inst->context);
@@ -990,21 +990,21 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
         LOGE("parse_arguments: inst is NULL");
         return false;
     }
-    
+
     LOGI("parse_arguments: inst=%p", (void*)inst);
-    
+
     if (!inst->context) {
         LOGE("parse_arguments: context is NULL");
         return false;
     }
-    
+
     LOGI("parse_arguments: context=%p", (void*)inst->context);
-    
+
     if (!inst->context->settings) {
         LOGE("parse_arguments: Settings is NULL");
         return false;
     }
-    
+
     LOGI("parse_arguments: settings=%p - All checks passed!", (void*)inst->context->settings);
 
     char** argv = (char**)malloc(argc * sizeof(char*));
@@ -1012,7 +1012,7 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
         LOGE("parse_arguments: Failed to allocate argv");
         return false;
     }
-    
+
     LOGI("parse_arguments: argv allocated, copying args...");
 
     for (int i = 0; i < argc; i++) {
@@ -1029,21 +1029,21 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
         }
     }
 
-    /* 
+    /*
      * 设置默认配置以增强稳定性
      */
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_RemoteConsoleAudio, FALSE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_AudioPlayback, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_CompressionEnabled, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_FastPathOutput, TRUE);
-    
-    /* 
+
+    /*
      * 针对连接 0x0002000D 错误的修复：
      * 1. 默认启用多种安全协议协商 (RDP + TLS + NLA)，以提高服务器兼容性。
      * 2. 显式启用各种安全层。
      * 3. 忽略证书验证错误，防止因 UI 缺失导致的验证失败或崩溃。
      */
-    freerdp_settings_set_uint32(inst->context->settings, FreeRDP_RequestedProtocols, 
+    freerdp_settings_set_uint32(inst->context->settings, FreeRDP_RequestedProtocols,
                                 0x00000001 | 0x00000002 | 0x00000004);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_TlsSecurity, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_NlaSecurity, TRUE);
@@ -1051,15 +1051,15 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_IgnoreCertificate, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_NegotiateSecurityLayer, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportStatusInfoPdu, TRUE);
-    
+
     /* 额外的稳定连接设置 */
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportMonitorLayoutPdu, FALSE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportDynamicChannels, TRUE);
     freerdp_settings_set_string(inst->context->settings, FreeRDP_ConfigPath, ".");
-    
+
     LOGI("parse_arguments: Security protocols set - RDP|TLS|NLA, IgnoreCertificate=TRUE");
-    
+
     LOGI("parse_arguments: Calling freerdp_client_settings_parse_command_line...");
     status = freerdp_client_settings_parse_command_line(inst->context->settings, argc, argv, FALSE);
     LOGI("parse_arguments: freerdp_client_settings_parse_command_line returned %u", (unsigned int)status);
@@ -1272,8 +1272,8 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
         return -1;
 
     rdpContext* context = inst->context;
-    
-    /* 
+
+    /*
      * 关键安全检查：必须检查连接是否已经建立。
      * 1. 检查 GDI 是否初始化（只有在 post_connect 后才会初始化）
      * 2. 检查是否正在断开
@@ -1283,7 +1283,7 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
         LOGW("set_client_decoding: GDI not initialized, connection not established yet");
         return -8;
     }
-    
+
     if (freerdp_shall_disconnect_context(context)) {
         LOGW("set_client_decoding: session disconnecting, skipping PDU");
         return -9;
@@ -1297,7 +1297,7 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
     if (!update)
         return -3;
 
-    /* 
+    /*
      * FreeRDP 3.x 核心库中可能没有 FreeRDP_DeactivateClientDecoding 这个自定义键。
      * 我们改用标准键 FreeRDP_SuppressOutput。
      */
@@ -1305,7 +1305,7 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
     freerdp_settings_set_bool(settings, FreeRDP_SuppressOutput, suppress);
 
     BOOL allowDisplayUpdates = enable ? TRUE : FALSE;
-    
+
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
@@ -1317,7 +1317,7 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
             LOGE("SuppressOutput PDU failed");
             return -6;
         }
-        
+
         LOGI("Client decoding %s, SuppressOutput sent (allowDisplayUpdates=%d)",
              enable ? "enabled" : "disabled", allowDisplayUpdates);
         return 0;
@@ -1350,10 +1350,10 @@ bool freerdp_harmonyos_has_h264(void) {
 
 bool freerdp_harmonyos_is_connected(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context)
         return false;
-    
+
     /* FreeRDP 3.x doesn't have freerdp_is_connected, check via shall_disconnect */
     return !freerdp_shall_disconnect_context(inst->context);
 }
@@ -1362,82 +1362,82 @@ bool freerdp_harmonyos_is_connected(int64_t instance) {
 
 bool freerdp_harmonyos_enter_background_mode(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("enter_background_mode: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpSettings* settings = context->settings;
     rdpUpdate* update = context->update;
-    
+
     if (!settings || !update) {
         LOGE("enter_background_mode: Invalid settings or update");
         return false;
     }
-    
+
     LOGI("Entering background mode - audio only");
-    
+
     /* Set background mode flag for run loop */
     g_isInBackgroundMode = TRUE;
-    
+
     /* Disable graphics decoding to save CPU/bandwidth */
     freerdp_settings_set_bool(settings, FreeRDP_DeactivateClientDecoding, TRUE);
-    
+
     /* Send SuppressOutput PDU to tell server to stop sending graphics */
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
     rect.right = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
     rect.bottom = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-    
+
     if (update->SuppressOutput) {
         /* FALSE = suppress display updates (only audio continues) */
         if (!update->SuppressOutput(context, FALSE, &rect)) {
             LOGW("SuppressOutput PDU failed, but continuing");
         }
     }
-    
+
     LOGI("Background mode active - graphics suppressed, audio continues, keepalive enabled");
     return true;
 }
 
 bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("exit_background_mode: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpSettings* settings = context->settings;
     rdpUpdate* update = context->update;
-    
+
     if (!settings || !update) {
         LOGE("exit_background_mode: Invalid settings or update");
         return false;
     }
-    
+
     LOGI("Exiting background mode - resuming graphics with full refresh");
-    
+
     /* Clear background mode flag FIRST */
     g_isInBackgroundMode = FALSE;
-    
+
     /* Re-enable graphics decoding */
     freerdp_settings_set_bool(settings, FreeRDP_DeactivateClientDecoding, FALSE);
-    
+
     /* Get full screen dimensions */
     UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
     UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-    
+
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
     rect.right = (UINT16)width;
     rect.bottom = (UINT16)height;
-    
+
     /* Step 1: Send SuppressOutput PDU to tell server to resume graphics */
     if (update->SuppressOutput) {
         /* TRUE = allow display updates */
@@ -1445,7 +1445,7 @@ bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
             LOGW("SuppressOutput resume PDU failed");
         }
     }
-    
+
     /* Step 2: Request full screen refresh using RefreshRect PDU */
     if (update->RefreshRect) {
         /* RefreshRect tells the server to re-send the specified area */
@@ -1457,19 +1457,19 @@ bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
     } else {
         LOGW("RefreshRect callback not available");
     }
-    
+
     /* Step 3: Mark entire GDI surface as invalid to force redraw */
     rdpGdi* gdi = context->gdi;
     if (gdi && gdi->primary && gdi->primary->hdc && gdi->primary->hdc->hwnd) {
         HGDI_WND hwnd = gdi->primary->hdc->hwnd;
-        
+
         /* Create a full-screen invalid region */
         GDI_RGN invalidRegion;
         invalidRegion.x = 0;
         invalidRegion.y = 0;
         invalidRegion.w = (INT32)width;
         invalidRegion.h = (INT32)height;
-        
+
         /* Add to invalid regions - this will trigger redraw on next update cycle */
         if (hwnd->invalid) {
             hwnd->invalid->null = FALSE;
@@ -1478,53 +1478,53 @@ bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
             hwnd->invalid->w = (INT32)width;
             hwnd->invalid->h = (INT32)height;
         }
-        
+
         /* Also expand cinvalid array if needed */
         if (hwnd->cinvalid && hwnd->count > 0) {
             hwnd->cinvalid[0] = invalidRegion;
             hwnd->ninvalid = 1;
         }
-        
+
         LOGI("GDI surface marked as invalid for full redraw");
     }
-    
+
     /* Step 4: Notify application that graphics update is coming */
     if (g_onGraphicsUpdate) {
         /* Trigger an immediate update callback for the full screen */
         g_onGraphicsUpdate((int64_t)(uintptr_t)inst, 0, 0, (int)width, (int)height);
         LOGI("Graphics update callback triggered");
     }
-    
+
     LOGI("Background mode exited - full screen refresh requested");
     return true;
 }
 
 bool freerdp_harmonyos_configure_audio(int64_t instance, bool playback, bool capture, int quality) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("configure_audio: Invalid instance");
         return false;
     }
-    
+
     rdpSettings* settings = inst->context->settings;
     if (!settings) {
         LOGE("configure_audio: Invalid settings");
         return false;
     }
-    
+
     /* Enable audio playback */
     if (playback) {
         freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback, TRUE);
         LOGI("Audio playback enabled");
     }
-    
+
     /* Enable audio capture (microphone) */
     if (capture) {
         freerdp_settings_set_bool(settings, FreeRDP_AudioCapture, TRUE);
         LOGI("Audio capture enabled");
     }
-    
+
     /* Set quality based on connection type */
     switch (quality) {
         case 0: /* Dynamic */
@@ -1543,89 +1543,89 @@ bool freerdp_harmonyos_configure_audio(int64_t instance, bool playback, bool cap
             LOGW("Unknown audio quality mode: %d", quality);
             break;
     }
-    
+
     return true;
 }
 
 bool freerdp_harmonyos_set_auto_reconnect(int64_t instance, bool enabled, int maxRetries, int delayMs) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("set_auto_reconnect: Invalid instance");
         return false;
     }
-    
+
     rdpSettings* settings = inst->context->settings;
     if (!settings) {
         LOGE("set_auto_reconnect: Invalid settings");
         return false;
     }
-    
+
     /* Configure FreeRDP auto-reconnect settings */
     freerdp_settings_set_bool(settings, FreeRDP_AutoReconnectionEnabled, enabled);
-    
+
     if (enabled && maxRetries > 0) {
         freerdp_settings_set_uint32(settings, FreeRDP_AutoReconnectMaxRetries, (UINT32)maxRetries);
         LOGI("Auto-reconnect enabled: maxRetries=%d, delayMs=%d", maxRetries, delayMs);
     } else {
         LOGI("Auto-reconnect disabled");
     }
-    
+
     return true;
 }
 
 /* Get connection health status */
 int freerdp_harmonyos_get_connection_health(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context)
         return -1; /* Invalid */
-    
+
     if (freerdp_shall_disconnect_context(inst->context))
         return 0; /* Disconnected */
-    
+
     /* Check if we can get event handles - indicates healthy connection */
     HANDLE handles[8];
     DWORD count = freerdp_get_event_handles(inst->context, handles, 8);
-    
+
     if (count == 0)
         return 1; /* Connected but degraded */
-    
+
     return 2; /* Healthy */
 }
 
 /* Force immediate full screen refresh - use after unlock/foreground */
 bool freerdp_harmonyos_request_refresh(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("request_refresh: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpSettings* settings = context->settings;
     rdpUpdate* update = context->update;
-    
+
     if (!settings || !update) {
         LOGE("request_refresh: Invalid settings or update");
         return false;
     }
-    
+
     /* Get screen dimensions */
     UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
     UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-    
+
     LOGI("Requesting full screen refresh (%ux%u)", width, height);
-    
+
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
     rect.right = (UINT16)width;
     rect.bottom = (UINT16)height;
-    
+
     bool success = true;
-    
+
     /* Method 1: RefreshRect PDU - asks server to re-send the area */
     if (update->RefreshRect) {
         if (!update->RefreshRect(context, 1, &rect)) {
@@ -1635,12 +1635,12 @@ bool freerdp_harmonyos_request_refresh(int64_t instance) {
             LOGI("RefreshRect PDU sent");
         }
     }
-    
+
     /* Method 2: Mark GDI as invalid */
     rdpGdi* gdi = context->gdi;
     if (gdi && gdi->primary && gdi->primary->hdc && gdi->primary->hdc->hwnd) {
         HGDI_WND hwnd = gdi->primary->hdc->hwnd;
-        
+
         if (hwnd->invalid) {
             hwnd->invalid->null = FALSE;
             hwnd->invalid->x = 0;
@@ -1650,39 +1650,39 @@ bool freerdp_harmonyos_request_refresh(int64_t instance) {
             LOGI("GDI invalid region set");
         }
     }
-    
+
     /* Method 3: Trigger immediate callback with current buffer */
     if (g_onGraphicsUpdate) {
         g_onGraphicsUpdate((int64_t)(uintptr_t)inst, 0, 0, (int)width, (int)height);
         LOGI("Graphics update callback triggered");
     }
-    
+
     return success;
 }
 
 /* Request partial screen refresh for specific area */
 bool freerdp_harmonyos_request_refresh_rect(int64_t instance, int x, int y, int width, int height) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("request_refresh_rect: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpUpdate* update = context->update;
-    
+
     if (!update) {
         LOGE("request_refresh_rect: Invalid update");
         return false;
     }
-    
+
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = (UINT16)x;
     rect.top = (UINT16)y;
     rect.right = (UINT16)(x + width);
     rect.bottom = (UINT16)(y + height);
-    
+
     if (update->RefreshRect) {
         if (!update->RefreshRect(context, 1, &rect)) {
             LOGW("RefreshRect PDU failed for rect (%d,%d,%d,%d)", x, y, width, height);
@@ -1690,34 +1690,34 @@ bool freerdp_harmonyos_request_refresh_rect(int64_t instance, int x, int y, int 
         }
         LOGI("RefreshRect sent for (%d,%d,%d,%d)", x, y, width, height);
     }
-    
+
     return true;
 }
 
 /* Get the current frame buffer for immediate display */
-bool freerdp_harmonyos_get_frame_buffer(int64_t instance, uint8_t** buffer, 
+bool freerdp_harmonyos_get_frame_buffer(int64_t instance, uint8_t** buffer,
                                          int* width, int* height, int* stride) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("get_frame_buffer: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpGdi* gdi = context->gdi;
-    
+
     if (!gdi || !gdi->primary) {
         LOGE("get_frame_buffer: GDI not initialized");
         return false;
     }
-    
+
     /* 使用 gdi 直接获取尺寸，避免 HGDI_BITMAP/rdpBitmap 类型不匹配 */
     if (buffer) *buffer = gdi->primary_buffer;
     if (width) *width = (int)gdi->width;
     if (height) *height = (int)gdi->height;
     if (stride) *stride = (int)gdi->stride;
-    
+
     return true;
 }
 
@@ -1730,26 +1730,26 @@ bool freerdp_harmonyos_is_in_background_mode(int64_t instance) {
 /* Send a keepalive/heartbeat to maintain connection in background */
 bool freerdp_harmonyos_send_keepalive(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context) {
         LOGE("send_keepalive: Invalid instance");
         return false;
     }
-    
+
     rdpContext* context = inst->context;
     rdpInput* input = context->input;
-    
+
     if (!input) {
         LOGE("send_keepalive: Invalid input");
         return false;
     }
-    
+
     /* Send a synchronize event as heartbeat - this doesn't affect the session */
     if (!freerdp_input_send_synchronize_event(input, 0)) {
         LOGW("Keepalive synchronize event failed");
         return false;
     }
-    
+
     update_network_activity();
     LOGD("Keepalive sent");
     return true;
@@ -1758,40 +1758,40 @@ bool freerdp_harmonyos_send_keepalive(int64_t instance) {
 /* Get time since last network activity in milliseconds */
 uint64_t freerdp_harmonyos_get_idle_time(int64_t instance) {
     WINPR_UNUSED(instance);
-    
+
     if (g_lastNetworkActivityTime == 0)
         return 0;
-    
+
     return GetTickCount64() - g_lastNetworkActivityTime;
 }
 
 /* Force check connection health and return detailed status */
 int freerdp_harmonyos_check_connection_status(int64_t instance) {
     freerdp* inst = (freerdp*)(uintptr_t)instance;
-    
+
     if (!inst || !inst->context)
         return -1; /* Invalid instance */
-    
+
     rdpContext* context = inst->context;
-    
+
     /* Check if disconnect was requested */
     if (freerdp_shall_disconnect_context(context))
         return 0; /* Disconnecting */
-    
+
     /* Check network activity */
     if (!is_network_alive())
         return 1; /* Network timeout */
-    
+
     /* Check if we can get event handles */
     HANDLE handles[8];
     DWORD count = freerdp_get_event_handles(context, handles, 8);
-    
+
     if (count == 0)
         return 2; /* Event handles failed */
-    
+
     /* Check if in background mode */
     if (g_isInBackgroundMode)
         return 10; /* Connected, background mode */
-    
+
     return 100; /* Connected, foreground mode */
 }

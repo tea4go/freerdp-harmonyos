@@ -212,6 +212,412 @@ hdc install entry/build/default/outputs/default/entry-default-signed.hap
 - 部署到远程测试服务器
 - 通过 DevEco Studio 远程调试
 
+## 常用命令速查
+
+> 💡 **提示**：以下命令假设 hdc 工具在 PATH 中，如果不在，请使用完整路径：
+> ```bash
+> # Windows
+> set HDC="C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
+> %HDC% <command>
+>
+> # 或直接使用（推荐）
+> "/c/Program Files/Huawei/DevEco Studio/sdk/default/openharmony/toolchains/hdc.exe" <command>
+> ```
+
+### 📦 编译项目
+
+#### 完整编译（推荐）
+```bash
+# Windows CMD
+build_windows.cmd
+
+# PowerShell（带签名）
+.\build-and-sign.ps1
+
+# Release 版本
+.\build-and-sign.ps1 -Release
+```
+
+#### 使用 hvigorw 编译
+```bash
+# Debug 版本
+hvigorw assembleHap --mode module -p product=default -p buildMode=debug
+
+# Release 版本
+hvigorw assembleHap --mode module -p product=default -p buildMode=release
+
+# 清理构建
+hvigorw clean
+```
+
+#### 只编译 Native 库（高级）
+```bash
+# 如果修改了 C++ 代码
+cd entry/src/main/cpp
+cmake .
+make
+```
+
+### 🚀 运行项目
+
+#### 安装应用
+```bash
+# 安装到设备
+hdc install entry/build/default/outputs/default/entry-default-signed.hap
+
+# 强制重新安装（覆盖已安装版本）
+hdc install -r entry/build/default/outputs/default/entry-default-signed.hap
+
+# 卸载应用
+hdc uninstall com.yjsoft.freerdp
+```
+
+#### 启动应用
+```bash
+# 方式1：启动主界面
+hdc shell aa start -a EntryAbility -b com.yjsoft.freerdp
+
+# 方式2：启动并清除之前的状态
+hdc shell aa start -a EntryAbility -b com.yjsoft.freerdp -C
+```
+
+#### 停止应用
+```bash
+# 强制停止应用
+hdc shell aa force-stop com.yjsoft.freerdp
+
+# 或使用进程名
+hdc shell pkill -f freerdp
+```
+
+### 🐛 调试项目
+
+#### 设备管理
+```bash
+# 列出连接的设备
+hdc list targets
+
+# 检查设备架构
+hdc shell getprop ro.product.cpu.abi
+# 应该输出: arm64-v8a
+
+# 检查设备信息
+hdc shell param get const.product.devicetype
+hdc shell param get const.product.model
+
+# 测试设备连接
+hdc shell "echo 'Device OK'"
+```
+
+#### 文件传输
+```bash
+# 推送文件到设备
+hdc file send local_file.txt /data/local/tmp/
+
+# 从设备拉取文件
+hdc file recv /data/local/tmp/remote_file.txt ./
+
+# 推送整个目录
+hdc file send ./my_folder /data/local/tmp/
+```
+
+#### Shell 访问
+```bash
+# 进入设备 shell
+hdc shell
+
+# 执行单个命令
+hdc shell ls -la /data/local/tmp/
+
+# 检查应用数据目录
+hdc shell ls -la /data/app/el2/100/base/com.yjsoft.freerdp/
+```
+
+### 📋 查看日志
+
+#### 实时日志（推荐）
+```bash
+# 查看所有日志
+hdc hilog
+
+# 实时查看并过滤 FreeRDP 相关日志
+hdc hilog -x | grep -E "(FreeRDP|RDP|Session)"
+
+# 只看应用日志
+hdc hilog -x | grep "com.yjsoft.freerdp"
+
+# 只看错误和警告
+hdc hilog -x | grep -E "(ERROR|WARN|FATAL)"
+```
+
+#### 日志管理
+```bash
+# 清空日志缓冲区
+hdc shell hilog -r
+
+# 查看最近100行日志
+hdc shell hilog -x | tail -100
+
+# 保存日志到文件
+hdc hilog -x > freerdp_debug.log
+
+# 持续监控并保存
+hdc hilog -x 2>&1 | tee -a freerdp_debug.log
+```
+
+#### 高级日志过滤
+```bash
+# 按标签过滤
+hdc hilog -t FreeRDP
+
+# 按进程ID过滤（先找到PID）
+hdc shell ps -ef | grep freerdp
+hdc hilog -P <PID>
+
+# 查看连接相关日志
+hdc hilog -x | grep -A 10 -B 5 "Connecting to"
+
+# 查看错误详情
+hdc hilog -x | grep -E "(OnConnectionFailure|OnDisconnected|Error)"
+```
+
+### 🔧 性能分析
+
+#### CPU和内存
+```bash
+# 查看应用进程信息
+hdc shell ps -ef | grep freerdp
+
+# 查看CPU使用率
+hdc shell "top -n 1 | grep freerdp"
+
+# 查看内存使用
+hdc shell "cat /proc/$(pidof com.yjsoft.freerdp)/status | grep -E '(VmRSS|VmSize)'"
+```
+
+#### 网络状态
+```bash
+# 查看网络连接
+hdc shell netstat -anp | grep 3389
+
+# 测试网络连通性
+hdc shell ping -c 4 192.168.1.100
+
+# 检查端口是否开放
+hdc shell "nc -zv 192.168.1.100 3389"
+```
+
+### 🎯 快速诊断脚本
+
+#### 一键诊断脚本
+创建文件 `diagnose.sh` (Linux/Mac) 或 `diagnose.bat` (Windows):
+
+**Windows版本 (diagnose.bat):**
+```batch
+@echo off
+echo === FreeRDP HarmonyOS 诊断工具 ===
+echo.
+
+echo [1/6] 检查设备连接...
+hdc list targets
+echo.
+
+echo [2/6] 检查设备架构...
+hdc shell getprop ro.product.cpu.abi
+echo.
+
+echo [3/6] 检查应用安装...
+hdc shell pm list packages | grep freerdp
+echo.
+
+echo [4/6] 检查应用进程...
+hdc shell ps -ef | grep freerdp
+echo.
+
+echo [5/6] 最近的应用日志（最后20行）...
+hdc shell hilog -x | grep freerdp | tail -20
+echo.
+
+echo [6/6] 检查网络连接...
+hdc shell netstat -anp | grep 3389
+echo.
+
+echo === 诊断完成 ===
+pause
+```
+
+**使用方法:**
+```bash
+# Windows
+diagnose.bat
+
+# 或直接运行
+hdc shell hilog -x | grep -E "(freerdp|FreeRDP)" | tail -50
+```
+
+### 📱 开发者快捷命令
+
+#### 快速重启应用
+```bash
+# 重启应用（保留数据）
+hdc shell aa force-stop com.yjsoft.freerdp && \
+hdc shell aa start -a EntryAbility -b com.yjsoft.freerdp
+```
+
+#### 快速重新安装
+```bash
+# 卸载旧版本 -> 安装新版本 -> 启动
+hdc uninstall com.yjsoft.freerdp && \
+hdc install entry/build/default/outputs/default/entry-default-signed.hap && \
+hdc shell aa start -a EntryAbility -b com.yjsoft.freerdp
+```
+
+#### 查看应用版本信息
+```bash
+hdc shell bm dump -n com.yjsoft.freerdp | grep -E "(versionName|versionCode)"
+```
+
+#### 清除应用数据
+```bash
+# 清除应用数据和缓存
+hdc shell bm clean -n com.yjsoft.freerdp -d  # 清除数据
+hdc shell bm clean -n com.yjsoft.freerdp -c  # 清除缓存
+```
+
+### 🛠️ 实用脚本工具
+
+为了简化开发流程，项目提供了多个实用脚本：
+
+#### 1. 快速运行脚本 (quick-run.bat)
+一键部署应用：卸载旧版本 → 安装新版本 → 启动应用
+```bash
+# Windows
+quick-run.bat
+```
+
+**功能：**
+- 自动检查设备连接
+- 停止旧版本应用
+- 安装最新HAP文件
+- 自动启动应用
+- 可选查看实时日志
+
+#### 2. 诊断工具 (diagnose.bat)
+全面检查应用状态和设备信息
+```bash
+# Windows
+diagnose.bat
+```
+
+**检查项目：**
+1. 设备连接状态
+2. 设备架构（arm64-v8a）
+3. 应用安装状态
+4. 应用运行进程
+5. 最近的应用日志
+6. 网络连接状态
+7. 应用权限
+8. Native库状态
+
+#### 3. 日志查看工具 (view-log.bat)
+交互式日志查看菜单
+```bash
+# Windows
+view-log.bat
+```
+
+**功能选项：**
+1. 实时日志 - FreeRDP 相关
+2. 实时日志 - 仅错误和警告
+3. 实时日志 - 完整
+4. 最近 50 行 - FreeRDP 相关
+5. 最近 100 行 - 完整
+6. 保存日志到文件
+7. 清空日志缓冲区
+8. 查看连接相关日志
+9. 查看 Native 库日志
+
+#### 4. PowerShell 工具集 (dev-tools.ps1)
+跨平台的 PowerShell 工具，支持多种操作：
+```powershell
+# 列出设备
+.\dev-tools.ps1 -Action devices
+
+# 安装并启动应用
+.\dev-tools.ps1 -Action install
+.\dev-tools.ps1 -Action start
+
+# 查看实时日志
+.\dev-tools.ps1 -Action logs -Filter "Connection"
+
+# 查看最近100行日志
+.\dev-tools.ps1 -Action recent -Lines 100
+
+# 重启应用
+.\dev-tools.ps1 -Action restart
+
+# 查看应用状态
+.\dev-tools.ps1 -Action status
+```
+
+#### 5. 快速参考卡片 (COMMANDS_QUICK_REF.md)
+可打印的命令参考卡片，包含最常用的命令和工作流程。
+
+### 📝 使用建议
+
+**开发调试流程：**
+```bash
+# 1. 修改代码后
+quick-run.bat           # 快速部署
+
+# 2. 如果遇到问题
+diagnose.bat           # 运行诊断
+
+# 3. 查看详细日志
+view-log.bat           # 选择合适的日志模式
+
+# 或使用 PowerShell
+.\dev-tools.ps1 -Action logs
+```
+
+**故障排查流程：**
+```bash
+# 1. 检查状态
+.\dev-tools.ps1 -Action status
+
+# 2. 查看日志
+.\dev-tools.ps1 -Action recent -Lines 100
+
+# 3. 保存日志分析
+.\dev-tools.ps1 -Action save
+```
+
+### 🔍 故障排除命令
+
+#### 检查签名问题
+```bash
+# 查看已安装应用的签名信息
+hdc shell bm dump -n com.yjsoft.freerdp | grep -A 5 "fingerprint"
+```
+
+#### 检查权限
+```bash
+# 查看应用权限
+hdc shell bm dump -n com.yjsoft.freerdp | grep -A 20 "requestPermissions"
+```
+
+#### 检查 Native 库
+```bash
+# 列出应用中的 Native 库
+hdc shell "ls -lh /data/app/el1/100/base/com.yjsoft.freerdp/lib/arm64/"
+```
+
+### 📚 更多资源
+
+- **完整构建指南**: [build_windows.md](./build_windows.md)
+- **故障排除**: 见下方"常见问题"章节
+- **自动连接调试**: [AUTO_CONNECT_GUIDE.md](./AUTO_CONNECT_GUIDE.md)
+
 ## 技术架构
 
 ```

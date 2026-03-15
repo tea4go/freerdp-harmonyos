@@ -24,10 +24,13 @@ struct Index {
   @State quickConnectHost: string = '192.168.52.127';
   @State quickConnectPort: string = '3389';
   @State quickConnectUser: string = 'administrator';
-  @State quickConnectPassword: string = '';
+  @State quickConnectPassword: string = 'testing123';
   @State showQuickConnect: boolean = false;
   @State showNativeError: boolean = false;
   @State nativeErrorMessage: string = '';
+
+  // 🚀 调试模式：启动时自动连接（方便调试）
+  @State autoConnectOnStart: boolean = true;  // 设置为 false 可禁用自动连接
 
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;
@@ -46,6 +49,14 @@ struct Index {
       // Show FreeRDP version
       const version = LibFreeRDP.getVersion();
       console.info(`${TAG}: FreeRDP version: ${version}`);
+    }
+
+    // 🚀 调试模式：自动快速连接（方便调试）
+    if (this.autoConnectOnStart && LibFreeRDP.isNativeLoaded()) {
+      console.info(`${TAG}: Auto-connect enabled, connecting in 500ms...`);
+      setTimeout(() => {
+        this.quickConnect();
+      }, 500);  // 延迟500ms，确保页面完全加载
     }
   }
 
