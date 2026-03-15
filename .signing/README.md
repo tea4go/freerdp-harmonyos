@@ -1,86 +1,61 @@
-# HarmonyOS Signing Files
+# HarmonyOS 签名文件
 
-This directory contains signing files for the HarmonyOS application.
+此目录包含 HarmonyOS 应用的调试签名文件。
 
-## Required Files
+## 必需文件
 
-Place the following files in this directory:
+将以下三个文件放置在此目录中：
 
-1. **debug.p12** - Keystore file
-   - Contains private key
-   - Password protected
+1. **debug.p12** - 密钥库文件（包含私钥）
+2. **debug.cer** - 证书文件（包含公钥信息）
+3. **debug.p7b** - Profile 文件（应用签名配置）
 
-2. **debug.cer** - Certificate file
-   - Contains public key information
-   - Used for app signature verification
+## 如何获取签名文件
 
-3. **debug.p7b** - Provision Profile
-   - Contains app signing configuration
-   - Links certificate to app bundle ID
+### 方式 1: 华为开发者平台（推荐）
 
-## How to Get Signing Files
+1. 访问 [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html)
+2. 登录华为开发者账号
+3. 进入"我的项目" → 选择项目 → "证书" → "生成调试证书"
+4. 下载三个文件并放到此目录
 
-### Option 1: Huawei Developer Console (Recommended for Cloud Testing)
+### 方式 2: DevEco Studio 自动生成
 
-1. Visit [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html)
-2. Login with your Huawei Developer account
-3. Create a new app or select existing app
-4. Go to: My Projects → Certificates → Generate Debug Certificate
-5. Download the three files and place them here
-
-### Option 2: DevEco Studio (If available locally)
-
-1. Open project in DevEco Studio
+1. 在 DevEco Studio 中打开项目
 2. File → Project Structure → Signing Configs
-3. Check "Automatically generate signature"
-4. Wait for generation to complete
-5. Copy generated files from `.signing` folder to server
+3. 勾选 "Automatically generate signature"
+4. 等待生成完成
 
-## Security Notes
+## 安全提醒
 
-- **DO NOT commit these files to Git**
-  - Already configured in `.gitignore`
-- **Keep passwords secure**
-  - Don't share keystore passwords
-- **Use different keys for production**
-  - These are debug keys only
-  - Generate separate keys for release builds
+⚠️ **重要**：
+- **不要**将签名文件提交到 Git（已在 `.gitignore` 中配置）
+- **不要**分享签名文件给他人
+- Debug 签名仅用于测试，生产环境需要正式签名
+- 定期备份签名文件到安全位置
 
-## Verification
+## 验证配置
 
-Run the setup script to verify files:
+运行验证脚本：
 
 ```powershell
-.\setup-signing.ps1
+.\check-hap.ps1
 ```
 
-## Build After Setup
+## 构建应用
 
-Once files are in place, build your app:
+配置完成后，构建应用：
 
 ```powershell
-# Using build script (recommended)
+# 使用构建脚本（推荐）
 .\build-and-sign.ps1
 
-# Or directly
-.\hvigorw.bat assembleHap
+# 或直接使用 hvigorw
+.\build_windows.cmd
 ```
 
-## Troubleshooting
+## 相关资源
 
-### "Unable to create profile" error
-
-- Verify all three files exist
-- Check file permissions
-- Ensure bundle ID matches certificate
-
-### Files not recognized
-
-- Check file names exactly match: `debug.p12`, `debug.cer`, `debug.p7b`
-- Verify files are not corrupted
-- Re-download from source if needed
-
-## Resources
-
-- [HarmonyOS Signing Guide](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/ide-signing-V5)
-- [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html)
+- [项目主文档](../README.md)
+- [Windows 构建指南](../build_windows.md)
+- [华为签名配置文档](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/ide-signing-V5)
