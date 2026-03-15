@@ -29,8 +29,8 @@ struct Index {
   @State showNativeError: boolean = false;
   @State nativeErrorMessage: string = '';
 
-  // 🚀 调试模式：启动时自动连接（方便调试）
-  @State autoConnectOnStart: boolean = true;  // 设置为 false 可禁用自动连接
+  // 🚀 调试模式:启动时自动连接（方便调试）
+  @State autoConnectOnStart: boolean = false;  // 生产环境禁用自动连接
 
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;

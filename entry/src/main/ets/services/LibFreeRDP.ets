@@ -15,6 +15,10 @@ interface FreerdpNative {
   setOnPreConnect(callback: (instance: number) => void): void;
   setOnDisconnecting(callback: (instance: number) => void): void;
   setOnDisconnected(callback: (instance: number) => void): void;
+  setOnSettingsChanged(callback: (width: number, height: number, bpp: number) => void): void;
+  setOnGraphicsUpdate(callback: (x: number, y: number, width: number, height: number) => void): void;
+  setOnGraphicsResize(callback: (width: number, height: number, bpp: number) => void): void;
+  setOnCursorTypeChanged(callback: (cursorType: number) => void): void;
   freerdpHasH264(): boolean;
   freerdpNew(): number;
   freerdpDisconnect(inst: number): boolean;
@@ -181,6 +185,12 @@ const instanceState: Map<number, boolean> = new Map();
 // Global event listener
 let eventListener: EventListener | null = null;
 
+// Global UI event callbacks
+let onSettingsChangedCallback: ((width: number, height: number, bpp: number) => void) | null = null;
+let onGraphicsUpdateCallback: ((x: number, y: number, width: number, height: number) => void) | null = null;
+let onGraphicsResizeCallback: ((width: number, height: number, bpp: number) => void) | null = null;
+let onCursorTypeChangedCallback: ((cursorType: number) => void) | null = null;
+
 // H.264 support flag
 let hasH264Support: boolean = false;
 
@@ -221,6 +231,33 @@ function initCallbacks(nativeModule: FreerdpNative): void {
     instanceState.delete(instance);
     if (eventListener) {
       eventListener.OnDisconnected(instance);
+    }
+  });
+
+  // UI event callbacks
+  nativeModule.setOnSettingsChanged((width: number, height: number, bpp: number) => {
+    console.info(`[LibFreeRDP] OnSettingsChanged: ${width}x${height}@${bpp}`);
+    if (onSettingsChangedCallback) {
+      onSettingsChangedCallback(width, height, bpp);
+    }
+  });
+
+  nativeModule.setOnGraphicsUpdate((x: number, y: number, width: number, height: number) => {
+    if (onGraphicsUpdateCallback) {
+      onGraphicsUpdateCallback(x, y, width, height);
+    }
+  });
+
+  nativeModule.setOnGraphicsResize((width: number, height: number, bpp: number) => {
+    console.info(`[LibFreeRDP] OnGraphicsResize: ${width}x${height}@${bpp}`);
+    if (onGraphicsResizeCallback) {
+      onGraphicsResizeCallback(width, height, bpp);
+    }
+  });
+
+  nativeModule.setOnCursorTypeChanged((cursorType: number) => {
+    if (onCursorTypeChangedCallback) {
+      onCursorTypeChangedCallback(cursorType);
     }
   });
 
@@ -295,6 +332,25 @@ export class LibFreeRDP {
    */
   static setEventListener(listener: EventListener): void {
     eventListener = listener;
+  }
+
+  /**
+   * Set UI event callbacks
+   */
+  static setOnSettingsChangedCallback(callback: (width: number, height: number, bpp: number) => void): void {
+    onSettingsChangedCallback = callback;
+  }
+
+  static setOnGraphicsUpdateCallback(callback: (x: number, y: number, width: number, height: number) => void): void {
+    onGraphicsUpdateCallback = callback;
+  }
+
+  static setOnGraphicsResizeCallback(callback: (width: number, height: number, bpp: number) => void): void {
+    onGraphicsResizeCallback = callback;
+  }
+
+  static setOnCursorTypeChangedCallback(callback: (cursorType: number) => void): void {
+    onCursorTypeChangedCallback = callback;
   }
 
   /**

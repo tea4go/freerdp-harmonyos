@@ -494,16 +494,38 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     update->DesktopResize = harmonyos_desktop_resize;
     LOGI("harmonyos_post_connect: Update callbacks set");
 
-    /*
-     * CRITICAL: Temporarily bypass ArkTS callbacks to isolate the crash.
-     * The crash occurs immediately after "Update callbacks set" when calling
-     * either g_onSettingsChanged or g_onConnectionSuccess.
-     *
-     * TODO: Debug TSFN implementation or callback parameters.
-     */
-    LOGI("harmonyos_post_connect: Skipping ArkTS callbacks to test connection stability");
+    /* Notify ArkTS layer about successful connection */
+    LOGI("harmonyos_post_connect: Notifying ArkTS callbacks...");
 
-    LOGI("harmonyos_post_connect: EXIT - connection established (UI not notified)");
+    /* TEMPORARILY DISABLED: These callbacks may cause abort() in freerdp_settings_get_uint32
+     * We'll re-enable them once we fix the root cause
+     */
+    LOGW("harmonyos_post_connect: UI callbacks temporarily disabled to prevent crash");
+
+    /*
+    if (g_onSettingsChanged && instance && instance->context && instance->context->settings) {
+        LOGI("harmonyos_post_connect: Calling g_onSettingsChanged");
+        rdpSettings* settings = instance->context->settings;
+        UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+        UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+        UINT32 bpp = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+        LOGI("harmonyos_post_connect: Settings: %ux%u@%u", width, height, bpp);
+        g_onSettingsChanged((int64_t)(uintptr_t)instance, width, height, bpp);
+        LOGI("harmonyos_post_connect: g_onSettingsChanged completed");
+    } else {
+        LOGW("harmonyos_post_connect: g_onSettingsChanged callback not set or invalid context");
+    }
+    */
+
+    if (g_onConnectionSuccess) {
+        LOGI("harmonyos_post_connect: Calling g_onConnectionSuccess");
+        g_onConnectionSuccess((int64_t)(uintptr_t)instance);
+        LOGI("harmonyos_post_connect: g_onConnectionSuccess completed");
+    } else {
+        LOGW("harmonyos_post_connect: g_onConnectionSuccess callback not set");
+    }
+
+    LOGI("harmonyos_post_connect: EXIT - connection established and UI notified");
     return TRUE;
 }
 
