@@ -301,12 +301,22 @@ static BOOL harmonyos_desktop_resize(rdpContext* context) {
         return FALSE;
     }
 
+    /* 参考 go-freerdp-webconnect 的实现：直接访问 settings 成员，而不是调用 getter 函数
+     * freerdp_settings_get_uint32 会触发 WINPR_ASSERT 导致 abort
+     * 直接访问结构体成员更安全，这也是 Go 代码推荐的做法
+     */
     if (g_onGraphicsResize) {
-        g_onGraphicsResize((int64_t)(uintptr_t)context->instance,
-            freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth),
-            freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight),
-            freerdp_settings_get_uint32(context->settings, FreeRDP_ColorDepth));
+        rdpSettings* settings = context->settings;
+
+        /* 直接访问 settings 结构体成员（标记为 DEPRECATED 但可用） */
+        UINT32 width = settings->DesktopWidth;
+        UINT32 height = settings->DesktopHeight;
+        UINT32 bpp = settings->ColorDepth;
+
+        LOGI("harmonyos_desktop_resize: %ux%u@%u", width, height, bpp);
+        g_onGraphicsResize((int64_t)(uintptr_t)context->instance, width, height, bpp);
     }
+
     return TRUE;
 }
 
@@ -497,25 +507,22 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     /* Notify ArkTS layer about successful connection */
     LOGI("harmonyos_post_connect: Notifying ArkTS callbacks...");
 
-    /* TEMPORARILY DISABLED: These callbacks may cause abort() in freerdp_settings_get_uint32
-     * We'll re-enable them once we fix the root cause
-     */
-    LOGW("harmonyos_post_connect: UI callbacks temporarily disabled to prevent crash");
-
-    /*
+    /* 参考 go-freerdp-webconnect: 直接访问 settings 成员而不是调用 getter 函数 */
     if (g_onSettingsChanged && instance && instance->context && instance->context->settings) {
         LOGI("harmonyos_post_connect: Calling g_onSettingsChanged");
         rdpSettings* settings = instance->context->settings;
-        UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-        UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-        UINT32 bpp = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+
+        /* 直接访问 settings 结构体成员，避免 freerdp_settings_get_uint32 触发 abort */
+        UINT32 width = settings->DesktopWidth;
+        UINT32 height = settings->DesktopHeight;
+        UINT32 bpp = settings->ColorDepth;
+
         LOGI("harmonyos_post_connect: Settings: %ux%u@%u", width, height, bpp);
         g_onSettingsChanged((int64_t)(uintptr_t)instance, width, height, bpp);
         LOGI("harmonyos_post_connect: g_onSettingsChanged completed");
     } else {
         LOGW("harmonyos_post_connect: g_onSettingsChanged callback not set or invalid context");
     }
-    */
 
     if (g_onConnectionSuccess) {
         LOGI("harmonyos_post_connect: Calling g_onConnectionSuccess");
@@ -1331,8 +1338,8 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
-    rect.right = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    rect.bottom = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    rect.right = (UINT16)settings->DesktopWidth;
+    rect.bottom = (UINT16)settings->DesktopHeight;
 
     if (update->SuppressOutput) {
         if (!update->SuppressOutput(context, allowDisplayUpdates, &rect)) {
@@ -1411,8 +1418,8 @@ bool freerdp_harmonyos_enter_background_mode(int64_t instance) {
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
-    rect.right = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    rect.bottom = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    rect.right = (UINT16)settings->DesktopWidth;
+    rect.bottom = (UINT16)settings->DesktopHeight;
 
     if (update->SuppressOutput) {
         /* FALSE = suppress display updates (only audio continues) */
@@ -1451,8 +1458,8 @@ bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
     freerdp_settings_set_bool(settings, FreeRDP_DeactivateClientDecoding, FALSE);
 
     /* Get full screen dimensions */
-    UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    UINT32 width = settings->DesktopWidth;
+    UINT32 height = settings->DesktopHeight;
 
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
@@ -1635,8 +1642,8 @@ bool freerdp_harmonyos_request_refresh(int64_t instance) {
     }
 
     /* Get screen dimensions */
-    UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    UINT32 width = settings->DesktopWidth;
+    UINT32 height = settings->DesktopHeight;
 
     LOGI("Requesting full screen refresh (%ux%u)", width, height);
 

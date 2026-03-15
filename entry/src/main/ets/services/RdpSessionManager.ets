@@ -146,9 +146,9 @@ export class RdpSessionManager {
     
     // Configure TCP keepalive
     LibFreeRDP.setTcpKeepalive(instance, true, 30, 5, 3);
-    
-    // Configure auto-reconnect
-    LibFreeRDP.setAutoReconnect(instance, true, 5, 2000);
+
+    // Configure auto-reconnect (DISABLED: connect once, no retry on failure)
+    LibFreeRDP.setAutoReconnect(instance, false, 0, 0);
     
     this.notifyStateChanged(SessionState.CONNECTED);
     

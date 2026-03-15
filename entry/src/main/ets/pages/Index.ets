@@ -30,7 +30,7 @@ struct Index {
   @State nativeErrorMessage: string = '';
 
   // 🚀 调试模式:启动时自动连接（方便调试）
-  @State autoConnectOnStart: boolean = false;  // 生产环境禁用自动连接
+  @State autoConnectOnStart: boolean = true;  // 开启自动连接，测试修复效果
 
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;
