@@ -33,6 +33,7 @@ oh_modules/
 # DevEco Studio
 .preview/
 .cxx/
+.hvigor/
 
 # Android Studio (legacy)
 android/Studio/build/
