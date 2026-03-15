@@ -60,3 +60,4 @@ android/Studio/local.properties
 
 # Chat logs (sensitive)
 聊天记录/
+.claude/settings.json

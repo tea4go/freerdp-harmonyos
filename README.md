@@ -76,27 +76,13 @@ Native 库需要在 GitHub Actions 上编译：
 
 ### 2. 配置签名（必需）
 
-在虚拟服务器环境中，需要先配置签名才能构建应用：
+HarmonyOS 应用必须签名才能安装。请查看详细的 [签名配置指南](./SIGNING.md)。
 
-#### 快速配置
+**快速步骤**：
 
-```powershell
-# 1. 运行签名设置脚本
-.\setup-signing.ps1
-
-# 2. 按照提示获取签名文件
-# 从华为开发者平台下载 debug.p12, debug.cer, debug.p7b
-# 放置到 .signing 目录
-
-# 3. 验证配置
-.\setup-signing.ps1
-```
-
-#### 详细说明
-
-查看完整签名配置文档：
-- **快速开始**: [SIGNING_QUICK_START.md](./SIGNING_QUICK_START.md)
-- **详细指南**: [签名配置指南.md](./签名配置指南.md)
+1. 从 [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html) 获取调试签名文件
+2. 将 `debug.p12`、`debug.cer`、`debug.p7b` 放到 `.signing/` 目录
+3. 运行验证：`.\setup-signing.ps1`
 
 ### 3. 编译 HarmonyOS 应用
 
