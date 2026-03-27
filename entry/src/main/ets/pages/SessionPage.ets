@@ -101,6 +101,7 @@ struct SessionPage {
   @State cursorType: number = 1;
   @State isInBackground: boolean = false;
   @State isScreenLocked: boolean = false;
+  @State remoteDesktopHasFocus: boolean = false;  // Track if remote desktop has focus
   
   // Components
   private sessionView: SessionView | null = null;
@@ -757,6 +758,14 @@ struct SessionPage {
         .backgroundColor('#000000')
         .focusable(true)
         .defaultFocus(true)
+        .onFocus(() => {
+          this.remoteDesktopHasFocus = true;
+          console.info(`${TAG}: Remote desktop gained focus`);
+        })
+        .onBlur(() => {
+          this.remoteDesktopHasFocus = false;
+          console.info(`${TAG}: Remote desktop lost focus`);
+        })
         .onAreaChange((oldValue: Area, newValue: Area) => {
           // Track screen dimensions for coordinate conversion
           this.screenWidth = newValue.width as number;
@@ -934,7 +943,11 @@ struct SessionPage {
     .height('100%')
     .backgroundColor('#000000')
     .onClick(() => {
-      this.toggleToolbar();
+      // Only toggle toolbar if remote desktop doesn't have focus
+      // This prevents space/enter keys from triggering toolbar
+      if (!this.remoteDesktopHasFocus) {
+        this.toggleToolbar();
+      }
     })
   }
 }
