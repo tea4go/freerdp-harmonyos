@@ -949,7 +949,7 @@ struct SessionPage {
               const keyCode = event.keyCode;
 
               // Enter key
-              if (keyCode === 2012) {  // KeyCode.KEYCODE_ENTER
+              if (keyCode === 2054) {  // KeyCode.KEYCODE_ENTER
                 console.info(`${TAG}: Enter key pressed`);
                 const VK_RETURN = 0x0D;
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RETURN, true);
@@ -969,28 +969,32 @@ struct SessionPage {
               }
 
               // Arrow keys
-              if (keyCode === 2012) {  // Up
+              if (keyCode === 2012) {  // KEYCODE_DPAD_UP
+                console.info(`${TAG}: Up arrow key pressed`);
                 const VK_UP = 0x26;
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_UP, true);
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_UP, false);
                 event.stopPropagation();
                 return;
               }
-              if (keyCode === 2013) {  // Down
+              if (keyCode === 2013) {  // KEYCODE_DPAD_DOWN
+                console.info(`${TAG}: Down arrow key pressed`);
                 const VK_DOWN = 0x28;
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DOWN, true);
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DOWN, false);
                 event.stopPropagation();
                 return;
               }
-              if (keyCode === 2014) {  // Left
+              if (keyCode === 2014) {  // KEYCODE_DPAD_LEFT
+                console.info(`${TAG}: Left arrow key pressed`);
                 const VK_LEFT = 0x25;
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_LEFT, true);
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_LEFT, false);
                 event.stopPropagation();
                 return;
               }
-              if (keyCode === 2015) {  // Right
+              if (keyCode === 2015) {  // KEYCODE_DPAD_RIGHT
+                console.info(`${TAG}: Right arrow key pressed`);
                 const VK_RIGHT = 0x27;
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RIGHT, true);
                 LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RIGHT, false);
