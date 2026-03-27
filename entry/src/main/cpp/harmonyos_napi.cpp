@@ -702,47 +702,54 @@ static napi_value FreerdpGetFrameBuffer(napi_env env, napi_callback_info info) {
     // Debug: Log first few pixels to verify data
     if (buffer && height > 0 && stride > 0) {
         LOGI("Frame buffer: %dx%d, stride=%d", width, height, stride);
-        LOGI("First 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+        LOGI("First 16 bytes (BGRX): %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
              buffer[0], buffer[1], buffer[2], buffer[3],
              buffer[4], buffer[5], buffer[6], buffer[7],
              buffer[8], buffer[9], buffer[10], buffer[11],
              buffer[12], buffer[13], buffer[14], buffer[15]);
     }
 
-    // PixelMap expects tightly packed data (width * 4 per row)
-    // If stride != width * 4, we need to repack the data
+    // Convert BGRX to RGBA format for PixelMap
+    // FreeRDP uses BGRX (little-endian), PixelMap needs RGBA
     const int bytes_per_pixel = 4;
     const int row_bytes = width * bytes_per_pixel;
-    const bool needs_repacking = (stride != row_bytes);
-
-    size_t buffer_size;
-    if (needs_repacking) {
-        // Need to remove padding between rows
-        buffer_size = (size_t)height * (size_t)row_bytes;
-        LOGI("Repacking buffer: stride=%d -> row_bytes=%d", stride, row_bytes);
-    } else {
-        // Already tightly packed
-        buffer_size = (size_t)height * (size_t)stride;
-    }
+    const size_t buffer_size = (size_t)height * (size_t)row_bytes;
 
     void* array_buffer_data = nullptr;
     napi_value array_buffer;
     napi_create_arraybuffer(env, buffer_size, &array_buffer_data, &array_buffer);
 
     if (array_buffer_data) {
-        if (needs_repacking) {
-            // Copy row by row, removing padding
-            uint8_t* dst = (uint8_t*)array_buffer_data;
-            const uint8_t* src = buffer;
-            for (int y = 0; y < height; y++) {
-                memcpy(dst, src, row_bytes);
-                dst += row_bytes;
-                src += stride;
+        uint8_t* dst = (uint8_t*)array_buffer_data;
+        const uint8_t* src = buffer;
+
+        LOGI("Converting BGRX -> RGBA, %d pixels", width * height);
+
+        // Convert pixel by pixel: BGRX -> RGBA
+        for (int y = 0; y < height; y++) {
+            const uint8_t* src_row = src + y * stride;
+            uint8_t* dst_row = dst + y * row_bytes;
+
+            for (int x = 0; x < width; x++) {
+                const uint8_t* src_pixel = src_row + x * 4;
+                uint8_t* dst_pixel = dst_row + x * 4;
+
+                // BGRX: B=src[0], G=src[1], R=src[2], X=src[3]
+                // RGBA: R=dst[0], G=dst[1], B=dst[2], A=dst[3]
+                dst_pixel[0] = src_pixel[2]; // R
+                dst_pixel[1] = src_pixel[1]; // G
+                dst_pixel[2] = src_pixel[0]; // B
+                dst_pixel[3] = 255;          // A (opaque)
             }
-        } else {
-            // Direct copy
-            memcpy(array_buffer_data, buffer, buffer_size);
         }
+
+        // Log first 16 bytes after conversion
+        uint8_t* result_bytes = (uint8_t*)array_buffer_data;
+        LOGI("First 16 bytes (RGBA): %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+             result_bytes[0], result_bytes[1], result_bytes[2], result_bytes[3],
+             result_bytes[4], result_bytes[5], result_bytes[6], result_bytes[7],
+             result_bytes[8], result_bytes[9], result_bytes[10], result_bytes[11],
+             result_bytes[12], result_bytes[13], result_bytes[14], result_bytes[15]);
     }
 
     return array_buffer;

@@ -79,7 +79,7 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 struct SessionPage {
   // Session state
   @State session: SessionState | null = null;
-  @State connectionState: ConnectionState = ConnectionState.DISCONNECTED;
+  @State @Watch('onConnectionStateChanged') connectionState: ConnectionState = ConnectionState.DISCONNECTED;
   @State statusMessage: string = '正在连接...';
   
   // Display state
@@ -109,10 +109,18 @@ struct SessionPage {
   
   // Heartbeat timer
   private heartbeatTimer: number = -1;
-  
+
   // Auto-hide toolbar timer
   private toolbarHideTimer: number = -1;
   private static readonly TOOLBAR_HIDE_DELAY = 4000;
+
+  /**
+   * Watch connectionState changes
+   */
+  onConnectionStateChanged(): void {
+    console.info(`${TAG}: connectionState changed to ${this.connectionState} (CONNECTED=${ConnectionState.CONNECTED})`);
+    console.info(`${TAG}: Will render ${this.connectionState === ConnectionState.CONNECTED ? 'SessionView' : 'status view'}`);
+  }
 
   aboutToAppear(): void {
     console.info(`${TAG}: aboutToAppear`);
@@ -223,8 +231,10 @@ struct SessionPage {
       if (this.session) {
         this.session.updateDisplaySettings(width, height, bpp);
       }
-      // Recreate pixel map with new dimensions
+      // Recreate pixel map with new dimensions and update graphics
       this.createPixelMap();
+      // Immediately get real FreeRDP data
+      this.updateGraphics();
     });
 
     LibFreeRDP.setOnSettingsChangedCallback((width: number, height: number, bpp: number) => {
@@ -291,27 +301,21 @@ struct SessionPage {
     }
 
     try {
+      // Create empty PixelMap with correct dimensions
+      const buffer = new ArrayBuffer(this.desktopWidth * this.desktopHeight * 4);
+
       const initializationOptions: image.InitializationOptions = {
         size: {
           width: this.desktopWidth,
           height: this.desktopHeight
         },
-        pixelFormat: image.PixelMapFormat.BGRA_8888,  // Match FreeRDP's BGRX format
-        alphaType: image.AlphaType.OPAQUE,  // Force opaque mode (ignore alpha channel)
+        pixelFormat: image.PixelMapFormat.RGBA_8888,
+        alphaType: image.AlphaType.OPAQUE,
         editable: true
       };
 
-      this.pixelMap = await image.createPixelMap(new ArrayBuffer(this.desktopWidth * this.desktopHeight * 4), initializationOptions);
-      console.info(`${TAG}: PixelMap created: ${this.desktopWidth}x${this.desktopHeight} (BGRA_OPAQUE)`);
-
-      // Immediately update graphics after creating pixelmap
-      this.updateGraphics();
-
-      // Request screen refresh to get initial content
-      if (this.session && this.session.getInstance() !== 0) {
-        console.info(`${TAG}: Requesting screen refresh...`);
-        LibFreeRDP.requestRefresh(this.session.getInstance());
-      }
+      this.pixelMap = await image.createPixelMap(buffer, initializationOptions);
+      console.info(`${TAG}: PixelMap created: ${this.desktopWidth}x${this.desktopHeight}`);
     } catch (error) {
       console.error(`${TAG}: Failed to create pixel map:`, error);
     }
@@ -328,11 +332,6 @@ struct SessionPage {
       return;
     }
 
-    if (!this.pixelMap) {
-      console.warn(`${TAG}: updateGraphics - PixelMap not ready yet`);
-      return;
-    }
-
     try {
       console.info(`${TAG}: Getting frame buffer from instance ${this.session.getInstance()}`);
 
@@ -345,25 +344,27 @@ struct SessionPage {
 
       console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
 
-      // TEST: Fill with red color to verify display works
-      const testMode = false; // Set to true to test display
-      if (testMode) {
-        const testBuffer = new Uint8Array(frameBuffer);
-        // Fill with red (BGRA format: B=0, G=0, R=255, A=255)
-        for (let i = 0; i < testBuffer.length; i += 4) {
-          testBuffer[i] = 0;      // B
-          testBuffer[i + 1] = 0;  // G
-          testBuffer[i + 2] = 255; // R
-          testBuffer[i + 3] = 255; // A
-        }
-        await this.pixelMap.writeBufferToPixels(testBuffer.buffer);
-        console.info(`${TAG}: TEST MODE - Filled with red color`);
-      } else {
-        // Write buffer to pixel map
-        await this.pixelMap.writeBufferToPixels(frameBuffer);
+      // Use real FreeRDP data (already converted to RGBA by native layer)
+      const dataToDisplay: ArrayBuffer = frameBuffer;
+
+      // Create NEW PixelMap each time instead of updating existing one
+      if (this.pixelMap) {
+        this.pixelMap.release();
+        this.pixelMap = null;
       }
 
-      console.info(`${TAG}: Buffer written to PixelMap successfully`);
+      const initializationOptions: image.InitializationOptions = {
+        size: {
+          width: this.desktopWidth,
+          height: this.desktopHeight
+        },
+        pixelFormat: image.PixelMapFormat.RGBA_8888,
+        alphaType: image.AlphaType.OPAQUE,
+        editable: false  // Read-only for display
+      };
+
+      this.pixelMap = await image.createPixelMap(dataToDisplay, initializationOptions);
+      console.info(`${TAG}: New PixelMap created from data`);
 
       // Force UI update by incrementing version
       this.pixelMapVersion++;
@@ -378,23 +379,25 @@ struct SessionPage {
    * Handle connection success
    */
   private async onConnectionSuccess(instance: number): Promise<void> {
+    console.info(`${TAG}: onConnectionSuccess called, setting connectionState to CONNECTED`);
     this.connectionState = ConnectionState.CONNECTED;
     this.statusMessage = '已连接';
-    
+    console.info(`${TAG}: connectionState set to ${this.connectionState}, statusMessage=${this.statusMessage}`);
+
     if (this.session) {
       this.session.setConnectionState(ConnectionState.CONNECTED);
     }
-    
+
     // Start background service
     this.backgroundService = new RdpBackgroundService(this.context);
     await this.backgroundService.start();
-    
+
     // Start heartbeat
     this.startHeartbeat();
-    
+
     // Auto-hide toolbar
     this.scheduleToolbarHide();
-    
+
     promptAction.showToast({ message: '连接成功' });
   }
 
@@ -722,15 +725,30 @@ struct SessionPage {
 
   build() {
     Stack() {
-      // Session view
-      if (this.connectionState === ConnectionState.CONNECTED) {
-        SessionView({
-          instance: this.session?.getInstance() ?? 0,
-          desktopWidth: this.desktopWidth,
-          desktopHeight: this.desktopHeight,
-          pixelMap: this.pixelMap,
-          pixelMapVersion: this.pixelMapVersion
-        })
+      // Session view - DIRECT RENDERING TEST
+      if (this.connectionState === ConnectionState.CONNECTED && this.pixelMap) {
+        Column() {
+          Text(`PixelMap Version: ${this.pixelMapVersion}`)
+            .fontSize(20)
+            .fontColor('#00FF00')
+            .position({ x: 10, y: 10 })
+            .zIndex(100)
+
+          Image(this.pixelMap)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Contain)
+            .backgroundColor('#FF0000')  // Red background to see if Image is there
+            .onComplete(() => {
+              console.info(`${TAG}: DIRECT Image onComplete!`);
+            })
+            .onError(() => {
+              console.error(`${TAG}: DIRECT Image onError`);
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#0000FF')  // Blue background
       } else {
         // Connection status view
         Column() {
