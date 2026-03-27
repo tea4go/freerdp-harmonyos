@@ -709,14 +709,40 @@ static napi_value FreerdpGetFrameBuffer(napi_env env, napi_callback_info info) {
              buffer[12], buffer[13], buffer[14], buffer[15]);
     }
 
-    // Create ArrayBuffer and copy data
-    size_t buffer_size = (size_t)height * (size_t)stride;
+    // PixelMap expects tightly packed data (width * 4 per row)
+    // If stride != width * 4, we need to repack the data
+    const int bytes_per_pixel = 4;
+    const int row_bytes = width * bytes_per_pixel;
+    const bool needs_repacking = (stride != row_bytes);
+
+    size_t buffer_size;
+    if (needs_repacking) {
+        // Need to remove padding between rows
+        buffer_size = (size_t)height * (size_t)row_bytes;
+        LOGI("Repacking buffer: stride=%d -> row_bytes=%d", stride, row_bytes);
+    } else {
+        // Already tightly packed
+        buffer_size = (size_t)height * (size_t)stride;
+    }
+
     void* array_buffer_data = nullptr;
     napi_value array_buffer;
     napi_create_arraybuffer(env, buffer_size, &array_buffer_data, &array_buffer);
 
     if (array_buffer_data) {
-        memcpy(array_buffer_data, buffer, buffer_size);
+        if (needs_repacking) {
+            // Copy row by row, removing padding
+            uint8_t* dst = (uint8_t*)array_buffer_data;
+            const uint8_t* src = buffer;
+            for (int y = 0; y < height; y++) {
+                memcpy(dst, src, row_bytes);
+                dst += row_bytes;
+                src += stride;
+            }
+        } else {
+            // Direct copy
+            memcpy(array_buffer_data, buffer, buffer_size);
+        }
     }
 
     return array_buffer;

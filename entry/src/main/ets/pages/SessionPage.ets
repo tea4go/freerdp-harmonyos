@@ -345,8 +345,23 @@ struct SessionPage {
 
       console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
 
-      // Write buffer to pixel map
-      await this.pixelMap.writeBufferToPixels(frameBuffer);
+      // TEST: Fill with red color to verify display works
+      const testMode = false; // Set to true to test display
+      if (testMode) {
+        const testBuffer = new Uint8Array(frameBuffer);
+        // Fill with red (BGRA format: B=0, G=0, R=255, A=255)
+        for (let i = 0; i < testBuffer.length; i += 4) {
+          testBuffer[i] = 0;      // B
+          testBuffer[i + 1] = 0;  // G
+          testBuffer[i + 2] = 255; // R
+          testBuffer[i + 3] = 255; // A
+        }
+        await this.pixelMap.writeBufferToPixels(testBuffer.buffer);
+        console.info(`${TAG}: TEST MODE - Filled with red color`);
+      } else {
+        // Write buffer to pixel map
+        await this.pixelMap.writeBufferToPixels(frameBuffer);
+      }
 
       console.info(`${TAG}: Buffer written to PixelMap successfully`);
 
