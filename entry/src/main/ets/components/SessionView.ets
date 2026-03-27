@@ -66,10 +66,6 @@ export struct SessionView {
   private initialPinchDistance: number = 0;
   private initialScale: number = 1.0;
 
-  // Canvas rendering
-  private canvasContext: CanvasRenderingContext2D | null = null;
-  private settings: RenderingContextSettings = new RenderingContextSettings(true);
-
   // Listener
   private listener: SessionViewListener | null = null;
 
@@ -92,7 +88,6 @@ export struct SessionView {
     // Force refresh when pixel map changes
     console.info(`SessionView: onPixelMapChanged called`);
     this.refreshKey++;
-    this.drawPixelMap();
   }
 
   /**
@@ -102,35 +97,6 @@ export struct SessionView {
     // Force refresh when version changes
     console.info(`SessionView: onVersionChanged called, version=${this.pixelMapVersion}`);
     this.refreshKey++;
-    this.drawPixelMap();
-  }
-
-  /**
-   * Draw PixelMap to Canvas
-   */
-  private drawPixelMap(): void {
-    if (!this.pixelMap || !this.canvasContext) {
-      console.warn(`SessionView: Cannot draw - pixelMap=${this.pixelMap !== null}, context=${this.canvasContext !== null}`);
-      return;
-    }
-
-    try {
-      // Clear canvas
-      this.canvasContext.clearRect(0, 0, this.viewWidth, this.viewHeight);
-
-      // Draw PixelMap
-      console.info(`SessionView: Drawing PixelMap at (${this.offsetX}, ${this.offsetY}), scale=${this.viewScale}`);
-      this.canvasContext.drawImage(
-        this.pixelMap,
-        this.offsetX,
-        this.offsetY,
-        this.desktopWidth * this.viewScale,
-        this.desktopHeight * this.viewScale
-      );
-      console.info(`SessionView: PixelMap drawn successfully`);
-    } catch (error) {
-      console.error(`SessionView: Failed to draw PixelMap:`, error);
-    }
   }
 
   /**
@@ -372,21 +338,17 @@ export struct SessionView {
         .height('100%')
         .backgroundColor('#1a1a1a')
 
-      // Remote desktop canvas
-      Canvas(this.canvasContext)
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#1a1a1a')
-        .onReady(() => {
-          console.info(`SessionView: Canvas onReady`);
-          this.canvasContext = new CanvasRenderingContext2D(this.settings);
-          if (this.pixelMap) {
-            this.drawPixelMap();
-          }
-        })
-
-      // Placeholder when no image
-      if (!this.pixelMap) {
+      // Remote desktop image
+      if (this.pixelMap) {
+        Image(this.pixelMap)
+          .key(`session_image_${this.refreshKey}`)
+          .width(this.desktopWidth * this.viewScale)
+          .height(this.desktopHeight * this.viewScale)
+          .position({ x: this.offsetX, y: this.offsetY })
+          .objectFit(ImageFit.Fill)
+          .interpolation(ImageInterpolation.Medium)
+      } else {
+        // Placeholder when no image
         Column() {
           Text('正在连接...')
             .fontSize(24)

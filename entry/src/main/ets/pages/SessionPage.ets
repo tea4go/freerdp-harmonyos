@@ -87,6 +87,10 @@ struct SessionPage {
   @State desktopHeight: number = 1080;
   @State pixelMap: image.PixelMap | null = null;
   @State pixelMapVersion: number = 0;  // Force UI update
+
+  // Update throttling
+  private isUpdating: boolean = false;
+  private pendingUpdate: boolean = false;
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
@@ -325,15 +329,22 @@ struct SessionPage {
    * Update graphics from frame buffer
    */
   private async updateGraphics(): Promise<void> {
-    console.info(`${TAG}: updateGraphics called`);
-
-    if (!this.session || this.session.getInstance() === 0) {
-      console.warn(`${TAG}: updateGraphics - no session or invalid instance`);
+    // Throttle: Skip if already updating
+    if (this.isUpdating) {
+      this.pendingUpdate = true;
       return;
     }
 
+    this.isUpdating = true;
+    this.pendingUpdate = false;
+
     try {
-      console.info(`${TAG}: Getting frame buffer from instance ${this.session.getInstance()}`);
+      if (!this.session || this.session.getInstance() === 0) {
+        console.warn(`${TAG}: updateGraphics - no session or invalid instance`);
+        return;
+      }
+
+      console.info(`${TAG}: updateGraphics called`);
 
       // Get frame buffer from native
       const frameBuffer = LibFreeRDP.getFrameBuffer(this.session.getInstance());
@@ -344,14 +355,12 @@ struct SessionPage {
 
       console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
 
+      // Debug: Check first 16 bytes of data
+      const debugView = new Uint8Array(frameBuffer);
+      console.info(`${TAG}: First 16 bytes: ${debugView[0]} ${debugView[1]} ${debugView[2]} ${debugView[3]} ${debugView[4]} ${debugView[5]} ${debugView[6]} ${debugView[7]} ${debugView[8]} ${debugView[9]} ${debugView[10]} ${debugView[11]} ${debugView[12]} ${debugView[13]} ${debugView[14]} ${debugView[15]}`);
+
       // Use real FreeRDP data (already converted to RGBA by native layer)
       const dataToDisplay: ArrayBuffer = frameBuffer;
-
-      // Create NEW PixelMap each time instead of updating existing one
-      if (this.pixelMap) {
-        this.pixelMap.release();
-        this.pixelMap = null;
-      }
 
       const initializationOptions: image.InitializationOptions = {
         size: {
@@ -363,8 +372,17 @@ struct SessionPage {
         editable: false  // Read-only for display
       };
 
-      this.pixelMap = await image.createPixelMap(dataToDisplay, initializationOptions);
+      // Create NEW PixelMap
+      const newPixelMap = await image.createPixelMap(dataToDisplay, initializationOptions);
       console.info(`${TAG}: New PixelMap created from data`);
+
+      // Release old PixelMap AFTER creating new one
+      if (this.pixelMap) {
+        this.pixelMap.release();
+      }
+
+      // Replace with new PixelMap
+      this.pixelMap = newPixelMap;
 
       // Force UI update by incrementing version
       this.pixelMapVersion++;
@@ -372,6 +390,15 @@ struct SessionPage {
 
     } catch (error) {
       console.error(`${TAG}: Failed to update graphics:`, error);
+    } finally {
+      this.isUpdating = false;
+
+      // If there was a pending update, schedule it
+      if (this.pendingUpdate) {
+        setTimeout(() => {
+          this.updateGraphics();
+        }, 16); // ~60 FPS
+      }
     }
   }
 
@@ -725,30 +752,15 @@ struct SessionPage {
 
   build() {
     Stack() {
-      // Session view - DIRECT RENDERING TEST
-      if (this.connectionState === ConnectionState.CONNECTED && this.pixelMap) {
-        Column() {
-          Text(`PixelMap Version: ${this.pixelMapVersion}`)
-            .fontSize(20)
-            .fontColor('#00FF00')
-            .position({ x: 10, y: 10 })
-            .zIndex(100)
-
-          Image(this.pixelMap)
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Contain)
-            .backgroundColor('#FF0000')  // Red background to see if Image is there
-            .onComplete(() => {
-              console.info(`${TAG}: DIRECT Image onComplete!`);
-            })
-            .onError(() => {
-              console.error(`${TAG}: DIRECT Image onError`);
-            })
-        }
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#0000FF')  // Blue background
+      // Session view
+      if (this.connectionState === ConnectionState.CONNECTED) {
+        SessionView({
+          instance: this.session?.getInstance() ?? 0,
+          desktopWidth: this.desktopWidth,
+          desktopHeight: this.desktopHeight,
+          pixelMap: this.pixelMap,
+          pixelMapVersion: this.pixelMapVersion
+        })
       } else {
         // Connection status view
         Column() {

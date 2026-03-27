@@ -279,15 +279,10 @@ static BOOL harmonyos_end_paint(rdpContext* context) {
         frameCount++;
     }
 
-    /*
-     * TODO: Re-enable g_onGraphicsUpdate once we implement Android-style
-     * graphics copy in ArkTS layer (using a dedicated N-API getter function)
-     */
-    // if (g_onGraphicsUpdate) {
-    //     g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
-    // }
-
-    //LOGD("harmonyos_end_paint: Graphics update region calculated, memcpy skipped (Android-style)");
+    // Trigger graphics update callback for each paint
+    if (g_onGraphicsUpdate) {
+        g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
+    }
 
     hwnd->invalid->null = TRUE;
     hwnd->ninvalid = 0;
