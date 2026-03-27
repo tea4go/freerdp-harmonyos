@@ -87,6 +87,10 @@ struct SessionPage {
   @State desktopHeight: number = 1080;
   @State pixelMap: image.PixelMap | null = null;
   @State pixelMapVersion: number = 0;  // Force UI update
+
+  // Screen dimensions for coordinate conversion
+  private screenWidth: number = 0;
+  private screenHeight: number = 0;
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
@@ -310,17 +314,13 @@ struct SessionPage {
       // Create empty PixelMap with correct dimensions
       const buffer = new ArrayBuffer(this.desktopWidth * this.desktopHeight * 4);
 
-      const initializationOptions: image.InitializationOptions = {
-        size: {
-          width: this.desktopWidth,
-          height: this.desktopHeight
-        },
+      // Create pixel map with inline options
+      this.pixelMap = await image.createPixelMap(buffer, {
+        size: { width: this.desktopWidth, height: this.desktopHeight },
         pixelFormat: image.PixelMapFormat.RGBA_8888,
         alphaType: image.AlphaType.OPAQUE,
         editable: true
-      };
-
-      this.pixelMap = await image.createPixelMap(buffer, initializationOptions);
+      } as image.InitializationOptions);
       console.info(`${TAG}: PixelMap created: ${this.desktopWidth}x${this.desktopHeight}`);
     } catch (error) {
       console.error(`${TAG}: Failed to create pixel map:`, error);
@@ -344,18 +344,13 @@ struct SessionPage {
 
       console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
 
-      // Create NEW PixelMap
-      const initializationOptions: image.InitializationOptions = {
-        size: {
-          width: this.desktopWidth,
-          height: this.desktopHeight
-        },
+      // Create NEW PixelMap with inline options
+      const newPixelMap = await image.createPixelMap(frameBuffer, {
+        size: { width: this.desktopWidth, height: this.desktopHeight },
         pixelFormat: image.PixelMapFormat.RGBA_8888,
         alphaType: image.AlphaType.OPAQUE,
         editable: false
-      };
-
-      const newPixelMap = await image.createPixelMap(frameBuffer, initializationOptions);
+      } as image.InitializationOptions);
 
       // Release old PixelMap AFTER creating new one
       if (this.pixelMap) {
@@ -743,7 +738,7 @@ struct SessionPage {
 
   build() {
     Stack() {
-      // Direct rendering - bypass SessionView for now
+      // Direct rendering with coordinate conversion
       if (this.connectionState === ConnectionState.CONNECTED && this.pixelMap) {
         Stack() {
           Image(this.pixelMap)
@@ -760,8 +755,16 @@ struct SessionPage {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
+        .focusable(true)
+        .defaultFocus(true)
+        .onAreaChange((oldValue: Area, newValue: Area) => {
+          // Track screen dimensions for coordinate conversion
+          this.screenWidth = newValue.width as number;
+          this.screenHeight = newValue.height as number;
+          console.info(`${TAG}: Screen size: ${this.screenWidth}x${this.screenHeight}`);
+        })
+        .hitTestBehavior(HitTestMode.Block)
         .onTouch((event: TouchEvent) => {
-          // Touch handling with fullscreen mode
           if (!this.session || this.session.getInstance() === 0) {
             return;
           }
@@ -772,18 +775,35 @@ struct SessionPage {
 
           try {
             const touch = event.touches[0];
-            const x = Math.floor(touch.x);
-            const y = Math.floor(touch.y);
+            const touchX = touch.x;
+            const touchY = touch.y;
+
+            // Calculate coordinate conversion for ImageFit.Contain
+            const scaleX = this.screenWidth / this.desktopWidth;
+            const scaleY = this.screenHeight / this.desktopHeight;
+            const scale = Math.min(scaleX, scaleY);
+
+            const displayedWidth = this.desktopWidth * scale;
+            const displayedHeight = this.desktopHeight * scale;
+
+            const offsetX = (this.screenWidth - displayedWidth) / 2;
+            const offsetY = (this.screenHeight - displayedHeight) / 2;
+
+            const desktopX = Math.floor((touchX - offsetX) / scale);
+            const desktopY = Math.floor((touchY - offsetY) / scale);
+
+            const x = Math.max(0, Math.min(desktopX, this.desktopWidth - 1));
+            const y = Math.max(0, Math.min(desktopY, this.desktopHeight - 1));
 
             const PTR_FLAGS_MOVE = 0x0800;
             const PTR_FLAGS_DOWN = 0x8000;
-            const PTR_FLAGS_BUTTON1 = 0x0001;
+            const PTR_FLAGS_BUTTON1 = 0x1000;
 
             if (event.type === TouchType.Down) {
-              console.info(`${TAG}: Touch DOWN at (${x}, ${y})`);
+              console.info(`${TAG}: Touch DOWN screen(${touchX.toFixed(0)}, ${touchY.toFixed(0)}) -> desktop(${x}, ${y})`);
               LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1);
             } else if (event.type === TouchType.Up) {
-              console.info(`${TAG}: Touch UP at (${x}, ${y})`);
+              console.info(`${TAG}: Touch UP screen(${touchX.toFixed(0)}, ${touchY.toFixed(0)}) -> desktop(${x}, ${y})`);
               LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_BUTTON1);
             } else if (event.type === TouchType.Move) {
               LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_MOVE);
@@ -791,6 +811,50 @@ struct SessionPage {
           } catch (error) {
             console.error(`${TAG}: Touch handling error:`, error);
           }
+
+          // Consume event to prevent propagation
+          event.stopPropagation();
+        })
+        .onKeyEvent((event: KeyEvent) => {
+          if (!this.session || this.session.getInstance() === 0) {
+            return;
+          }
+
+          try {
+            const keyCode = event.keyCode;
+
+            // Handle key down and up events
+            if (event.type === KeyType.Down) {
+              console.info(`${TAG}: Key DOWN code=${keyCode}, text="${event.keyText}"`);
+
+              // For printable characters, send as Unicode
+              if (event.keyText && event.keyText.length === 1) {
+                const charCode = event.keyText.charCodeAt(0);
+                console.info(`${TAG}: Sending Unicode char: ${event.keyText} (${charCode})`);
+                LibFreeRDP.sendUnicodeKeyEvent(this.session.getInstance(), charCode, true);
+              } else {
+                // For special keys, send as key event
+                console.info(`${TAG}: Sending key event: ${keyCode}`);
+                LibFreeRDP.sendKeyEvent(this.session.getInstance(), keyCode, true);
+              }
+            } else if (event.type === KeyType.Up) {
+              console.info(`${TAG}: Key UP code=${keyCode}`);
+
+              // For printable characters
+              if (event.keyText && event.keyText.length === 1) {
+                const charCode = event.keyText.charCodeAt(0);
+                LibFreeRDP.sendUnicodeKeyEvent(this.session.getInstance(), charCode, false);
+              } else {
+                // For special keys
+                LibFreeRDP.sendKeyEvent(this.session.getInstance(), keyCode, false);
+              }
+            }
+          } catch (error) {
+            console.error(`${TAG}: Key event handling error:`, error);
+          }
+
+          // Prevent event propagation
+          event.stopPropagation();
         })
       } else {
         // Connection status view
