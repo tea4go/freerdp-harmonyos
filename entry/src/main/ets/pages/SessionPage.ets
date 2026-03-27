@@ -87,10 +87,6 @@ struct SessionPage {
   @State desktopHeight: number = 1080;
   @State pixelMap: image.PixelMap | null = null;
   @State pixelMapVersion: number = 0;  // Force UI update
-
-  // Update throttling
-  private isUpdating: boolean = false;
-  private pendingUpdate: boolean = false;
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
@@ -329,39 +325,20 @@ struct SessionPage {
    * Update graphics from frame buffer
    */
   private async updateGraphics(): Promise<void> {
-    // Throttle: Skip if already updating
-    if (this.isUpdating) {
-      this.pendingUpdate = true;
+    if (!this.session || this.session.getInstance() === 0) {
       return;
     }
 
-    this.isUpdating = true;
-    this.pendingUpdate = false;
-
     try {
-      if (!this.session || this.session.getInstance() === 0) {
-        console.warn(`${TAG}: updateGraphics - no session or invalid instance`);
-        return;
-      }
-
-      console.info(`${TAG}: updateGraphics called`);
-
       // Get frame buffer from native
       const frameBuffer = LibFreeRDP.getFrameBuffer(this.session.getInstance());
       if (!frameBuffer) {
-        console.warn(`${TAG}: Failed to get frame buffer`);
         return;
       }
 
       console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
 
-      // Debug: Check first 16 bytes of data
-      const debugView = new Uint8Array(frameBuffer);
-      console.info(`${TAG}: First 16 bytes: ${debugView[0]} ${debugView[1]} ${debugView[2]} ${debugView[3]} ${debugView[4]} ${debugView[5]} ${debugView[6]} ${debugView[7]} ${debugView[8]} ${debugView[9]} ${debugView[10]} ${debugView[11]} ${debugView[12]} ${debugView[13]} ${debugView[14]} ${debugView[15]}`);
-
-      // Use real FreeRDP data (already converted to RGBA by native layer)
-      const dataToDisplay: ArrayBuffer = frameBuffer;
-
+      // Create NEW PixelMap
       const initializationOptions: image.InitializationOptions = {
         size: {
           width: this.desktopWidth,
@@ -369,12 +346,10 @@ struct SessionPage {
         },
         pixelFormat: image.PixelMapFormat.RGBA_8888,
         alphaType: image.AlphaType.OPAQUE,
-        editable: false  // Read-only for display
+        editable: false
       };
 
-      // Create NEW PixelMap
-      const newPixelMap = await image.createPixelMap(dataToDisplay, initializationOptions);
-      console.info(`${TAG}: New PixelMap created from data`);
+      const newPixelMap = await image.createPixelMap(frameBuffer, initializationOptions);
 
       // Release old PixelMap AFTER creating new one
       if (this.pixelMap) {
@@ -383,22 +358,11 @@ struct SessionPage {
 
       // Replace with new PixelMap
       this.pixelMap = newPixelMap;
-
-      // Force UI update by incrementing version
       this.pixelMapVersion++;
-      console.info(`${TAG}: PixelMap updated, version: ${this.pixelMapVersion}`);
 
+      console.info(`${TAG}: PixelMap updated, version: ${this.pixelMapVersion}`);
     } catch (error) {
       console.error(`${TAG}: Failed to update graphics:`, error);
-    } finally {
-      this.isUpdating = false;
-
-      // If there was a pending update, schedule it
-      if (this.pendingUpdate) {
-        setTimeout(() => {
-          this.updateGraphics();
-        }, 16); // ~60 FPS
-      }
     }
   }
 
@@ -752,14 +716,48 @@ struct SessionPage {
 
   build() {
     Stack() {
-      // Session view
-      if (this.connectionState === ConnectionState.CONNECTED) {
-        SessionView({
-          instance: this.session?.getInstance() ?? 0,
-          desktopWidth: this.desktopWidth,
-          desktopHeight: this.desktopHeight,
-          pixelMap: this.pixelMap,
-          pixelMapVersion: this.pixelMapVersion
+      // Direct rendering - bypass SessionView for now
+      if (this.connectionState === ConnectionState.CONNECTED && this.pixelMap) {
+        Stack() {
+          Image(this.pixelMap)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Contain)
+            .onComplete(() => {
+              console.info(`${TAG}: Image onComplete`);
+            })
+            .onError(() => {
+              console.error(`${TAG}: Image onError`);
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#000000')
+        .onTouch((event: TouchEvent) => {
+          // SIMPLE TEST: Only send move events, no click
+          if (!this.session || this.session.getInstance() === 0) {
+            return;
+          }
+
+          if (!event.touches || event.touches.length === 0) {
+            return;
+          }
+
+          try {
+            const touch = event.touches[0];
+            const x = Math.floor(touch.x);
+            const y = Math.floor(touch.y);
+
+            // ONLY send MOVE events for now
+            const PTR_FLAGS_MOVE = 0x0800;
+
+            if (event.type === TouchType.Move) {
+              LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_MOVE);
+            }
+            // Skip DOWN and UP for now to prevent disconnect
+          } catch (error) {
+            console.error(`${TAG}: Touch handling error:`, error);
+          }
         })
       } else {
         // Connection status view
