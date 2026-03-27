@@ -157,7 +157,10 @@ struct SessionPage {
   onPageShow(): void {
     console.info(`${TAG}: onPageShow`);
     this.isInBackground = false;
-    
+
+    // Enter fullscreen immersive mode
+    this.setFullScreen(true);
+
     if (this.session) {
       this.session.setInBackground(false);
       // Resume graphics
@@ -170,7 +173,10 @@ struct SessionPage {
   onPageHide(): void {
     console.info(`${TAG}: onPageHide`);
     this.isInBackground = true;
-    
+
+    // Exit fullscreen
+    this.setFullScreen(false);
+
     if (this.session) {
       this.session.setInBackground(true);
       // Suppress graphics but keep audio
@@ -601,6 +607,27 @@ struct SessionPage {
   }
 
   /**
+   * Set fullscreen immersive mode
+   */
+  private async setFullScreen(fullscreen: boolean): Promise<void> {
+    try {
+      const win = await window.getLastWindow(this.context);
+      if (fullscreen) {
+        // Hide status bar and navigation bar
+        await win.setWindowSystemBarEnable([]);
+        await win.setWindowLayoutFullScreen(true);
+        console.info(`${TAG}: Fullscreen mode enabled`);
+      } else {
+        await win.setWindowSystemBarEnable(['status', 'navigation']);
+        await win.setWindowLayoutFullScreen(false);
+        console.info(`${TAG}: Fullscreen mode disabled`);
+      }
+    } catch (error) {
+      console.error(`${TAG}: Failed to set fullscreen:`, error);
+    }
+  }
+
+  /**
    * Cleanup resources
    */
   private async cleanup(): Promise<void> {
@@ -734,7 +761,7 @@ struct SessionPage {
         .height('100%')
         .backgroundColor('#000000')
         .onTouch((event: TouchEvent) => {
-          // SIMPLE TEST: Only send move events, no click
+          // Touch handling with fullscreen mode
           if (!this.session || this.session.getInstance() === 0) {
             return;
           }
@@ -748,13 +775,19 @@ struct SessionPage {
             const x = Math.floor(touch.x);
             const y = Math.floor(touch.y);
 
-            // ONLY send MOVE events for now
             const PTR_FLAGS_MOVE = 0x0800;
+            const PTR_FLAGS_DOWN = 0x8000;
+            const PTR_FLAGS_BUTTON1 = 0x0001;
 
-            if (event.type === TouchType.Move) {
+            if (event.type === TouchType.Down) {
+              console.info(`${TAG}: Touch DOWN at (${x}, ${y})`);
+              LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1);
+            } else if (event.type === TouchType.Up) {
+              console.info(`${TAG}: Touch UP at (${x}, ${y})`);
+              LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_BUTTON1);
+            } else if (event.type === TouchType.Move) {
               LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_MOVE);
             }
-            // Skip DOWN and UP for now to prevent disconnect
           } catch (error) {
             console.error(`${TAG}: Touch handling error:`, error);
           }
