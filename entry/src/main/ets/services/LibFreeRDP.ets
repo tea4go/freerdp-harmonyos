@@ -45,6 +45,14 @@ interface FreerdpNative {
   freerdpSendKeepalive(inst: number): boolean;
   freerdpGetIdleTime(inst: number): number;
   freerdpCheckConnectionStatus(inst: number): number;
+  freerdpGetFrameBuffer(inst: number): ArrayBuffer | null;
+  freerdpGetFrameBufferInfo(inst: number): FrameBufferInfo | null;
+}
+
+export interface FrameBufferInfo {
+  width: number;
+  height: number;
+  stride: number;
 }
 
 let nativeLoaded = false;
@@ -915,6 +923,44 @@ export class LibFreeRDP {
     } catch (e) {
       console.error(`${LibFreeRDP.TAG}: checkConnectionStatus error:`, e);
       return -1;
+    }
+  }
+
+  /**
+   * Get frame buffer data
+   * Returns an ArrayBuffer containing RGBA pixel data, or null if not available
+   */
+  static getFrameBuffer(inst: number): ArrayBuffer | null {
+    if (!LibFreeRDP.ensureNativeReady()) {
+      return null;
+    }
+    if (inst === 0) {
+      return null;
+    }
+    try {
+      return freerdpNative!.freerdpGetFrameBuffer(inst);
+    } catch (e) {
+      console.error(`${LibFreeRDP.TAG}: getFrameBuffer error:`, e);
+      return null;
+    }
+  }
+
+  /**
+   * Get frame buffer information (dimensions only, no data copy)
+   * Returns {width, height, stride} or null if not available
+   */
+  static getFrameBufferInfo(inst: number): FrameBufferInfo | null {
+    if (!LibFreeRDP.ensureNativeReady()) {
+      return null;
+    }
+    if (inst === 0) {
+      return null;
+    }
+    try {
+      return freerdpNative!.freerdpGetFrameBufferInfo(inst);
+    } catch (e) {
+      console.error(`${LibFreeRDP.TAG}: getFrameBufferInfo error:`, e);
+      return null;
     }
   }
 }

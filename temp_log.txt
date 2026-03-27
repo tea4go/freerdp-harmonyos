@@ -1,0 +1,1 @@
+FINDSTR: 无法打开 SessionPage OnGraphics PixelMap OnConnect LibFreeRDP

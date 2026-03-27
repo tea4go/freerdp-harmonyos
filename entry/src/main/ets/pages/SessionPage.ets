@@ -86,6 +86,7 @@ struct SessionPage {
   @State desktopWidth: number = 1920;
   @State desktopHeight: number = 1080;
   @State pixelMap: image.PixelMap | null = null;
+  @State pixelMapVersion: number = 0;  // Force UI update
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
@@ -176,12 +177,12 @@ struct SessionPage {
    */
   private async initSession(bookmark: BookmarkBase): Promise<void> {
     console.info(`${TAG}: Initializing session for ${bookmark.hostname}`);
-    
+
     // Create session state
     this.session = new SessionState(bookmark);
     this.connectionState = ConnectionState.CONNECTING;
     this.statusMessage = '正在连接...';
-    
+
     // Set up event listener callbacks
     globalOnPreConnectCallback = (instance: number): void => {
       console.info(`${TAG}: OnPreConnect`);
@@ -203,11 +204,40 @@ struct SessionPage {
       console.info(`${TAG}: OnDisconnected`);
       this.onDisconnected(instance);
     };
-    
+
     // Set up event listener
     const eventListener = new SessionEventListenerImpl();
     LibFreeRDP.setEventListener(eventListener);
-    
+
+    // Set up graphics update callbacks
+    LibFreeRDP.setOnGraphicsUpdateCallback((x: number, y: number, width: number, height: number) => {
+      if (this.session && this.session.getInstance() !== 0) {
+        this.updateGraphics();
+      }
+    });
+
+    LibFreeRDP.setOnGraphicsResizeCallback((width: number, height: number, bpp: number) => {
+      console.info(`${TAG}: OnGraphicsResize: ${width}x${height}@${bpp}bpp`);
+      this.desktopWidth = width;
+      this.desktopHeight = height;
+      if (this.session) {
+        this.session.updateDisplaySettings(width, height, bpp);
+      }
+      // Recreate pixel map with new dimensions
+      this.createPixelMap();
+    });
+
+    LibFreeRDP.setOnSettingsChangedCallback((width: number, height: number, bpp: number) => {
+      console.info(`${TAG}: OnSettingsChanged: ${width}x${height}@${bpp}bpp`);
+      this.desktopWidth = width;
+      this.desktopHeight = height;
+      if (this.session) {
+        this.session.updateDisplaySettings(width, height, bpp);
+      }
+      // Recreate pixel map with new dimensions
+      this.createPixelMap();
+    });
+
     // Create FreeRDP instance
     const instance = LibFreeRDP.newInstance();
     if (instance === 0) {
@@ -215,10 +245,10 @@ struct SessionPage {
       this.connectionState = ConnectionState.DISCONNECTED;
       return;
     }
-    
+
     this.session.setInstance(instance);
     GlobalSessionManager.registerSession(instance, this.session);
-    
+
     // Set connection info
     const connectionInfo: BookmarkSettings = this.createConnectionInfo(bookmark);
     if (!LibFreeRDP.setConnectionInfo(instance, connectionInfo)) {
@@ -226,7 +256,7 @@ struct SessionPage {
       this.connectionState = ConnectionState.DISCONNECTED;
       return;
     }
-    
+
     // Set session info for reconnection
     const sessionInfo: SessionInfo = {
       instance: instance,
@@ -237,11 +267,95 @@ struct SessionPage {
       password: bookmark.password
     };
     NetworkManager.setSessionInfo(sessionInfo);
-    
+
     // Connect
     if (!LibFreeRDP.connect(instance)) {
       this.statusMessage = '错误：连接失败';
       this.connectionState = ConnectionState.DISCONNECTED;
+    }
+  }
+
+  /**
+   * Create or recreate pixel map with current dimensions
+   */
+  private async createPixelMap(): Promise<void> {
+    if (this.desktopWidth <= 0 || this.desktopHeight <= 0) {
+      console.warn(`${TAG}: Cannot create pixel map - invalid dimensions`);
+      return;
+    }
+
+    // Release old pixel map
+    if (this.pixelMap) {
+      this.pixelMap.release();
+      this.pixelMap = null;
+    }
+
+    try {
+      const initializationOptions: image.InitializationOptions = {
+        size: {
+          width: this.desktopWidth,
+          height: this.desktopHeight
+        },
+        pixelFormat: image.PixelMapFormat.BGRA_8888,  // Match FreeRDP's BGRX format
+        alphaType: image.AlphaType.OPAQUE,  // Force opaque mode (ignore alpha channel)
+        editable: true
+      };
+
+      this.pixelMap = await image.createPixelMap(new ArrayBuffer(this.desktopWidth * this.desktopHeight * 4), initializationOptions);
+      console.info(`${TAG}: PixelMap created: ${this.desktopWidth}x${this.desktopHeight} (BGRA_OPAQUE)`);
+
+      // Immediately update graphics after creating pixelmap
+      this.updateGraphics();
+
+      // Request screen refresh to get initial content
+      if (this.session && this.session.getInstance() !== 0) {
+        console.info(`${TAG}: Requesting screen refresh...`);
+        LibFreeRDP.requestRefresh(this.session.getInstance());
+      }
+    } catch (error) {
+      console.error(`${TAG}: Failed to create pixel map:`, error);
+    }
+  }
+
+  /**
+   * Update graphics from frame buffer
+   */
+  private async updateGraphics(): Promise<void> {
+    console.info(`${TAG}: updateGraphics called`);
+
+    if (!this.session || this.session.getInstance() === 0) {
+      console.warn(`${TAG}: updateGraphics - no session or invalid instance`);
+      return;
+    }
+
+    if (!this.pixelMap) {
+      console.warn(`${TAG}: updateGraphics - PixelMap not ready yet`);
+      return;
+    }
+
+    try {
+      console.info(`${TAG}: Getting frame buffer from instance ${this.session.getInstance()}`);
+
+      // Get frame buffer from native
+      const frameBuffer = LibFreeRDP.getFrameBuffer(this.session.getInstance());
+      if (!frameBuffer) {
+        console.warn(`${TAG}: Failed to get frame buffer`);
+        return;
+      }
+
+      console.info(`${TAG}: Frame buffer received, size: ${frameBuffer.byteLength} bytes`);
+
+      // Write buffer to pixel map
+      await this.pixelMap.writeBufferToPixels(frameBuffer);
+
+      console.info(`${TAG}: Buffer written to PixelMap successfully`);
+
+      // Force UI update by incrementing version
+      this.pixelMapVersion++;
+      console.info(`${TAG}: PixelMap updated, version: ${this.pixelMapVersion}`);
+
+    } catch (error) {
+      console.error(`${TAG}: Failed to update graphics:`, error);
     }
   }
 
@@ -599,7 +713,8 @@ struct SessionPage {
           instance: this.session?.getInstance() ?? 0,
           desktopWidth: this.desktopWidth,
           desktopHeight: this.desktopHeight,
-          pixelMap: this.pixelMap
+          pixelMap: this.pixelMap,
+          pixelMapVersion: this.pixelMapVersion
         })
       } else {
         // Connection status view

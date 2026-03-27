@@ -41,21 +41,23 @@ export interface SessionViewListener {
 export struct SessionView {
   // Session instance
   @Prop instance: number = 0;
-  
+
   // Display dimensions
   @Prop desktopWidth: number = 1920;
   @Prop desktopHeight: number = 1080;
-  
+
   // Pixel map for rendering
   @Prop @Watch('onPixelMapChanged') pixelMap: image.PixelMap | null = null;
-  
+  @Prop @Watch('onVersionChanged') pixelMapVersion: number = 0;  // Trigger UI update
+
   // View state
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
   @State viewWidth: number = 0;
   @State viewHeight: number = 0;
-  
+  @State refreshKey: number = 0;  // Internal refresh trigger
+
   // Touch state
   private lastTouchX: number = 0;
   private lastTouchY: number = 0;
@@ -63,10 +65,10 @@ export struct SessionView {
   private isScaling: boolean = false;
   private initialPinchDistance: number = 0;
   private initialScale: number = 1.0;
-  
+
   // Listener
   private listener: SessionViewListener | null = null;
-  
+
   // Constants
   private static readonly MIN_SCALE = 0.25;
   private static readonly MAX_SCALE = 4.0;
@@ -84,6 +86,15 @@ export struct SessionView {
    */
   onPixelMapChanged(): void {
     // Force refresh when pixel map changes
+    this.refreshKey++;
+  }
+
+  /**
+   * Handle version changes - triggers UI refresh
+   */
+  onVersionChanged(): void {
+    // Force refresh when version changes
+    this.refreshKey++;
   }
 
   /**
@@ -328,6 +339,7 @@ export struct SessionView {
       // Remote desktop canvas
       if (this.pixelMap) {
         Image(this.pixelMap)
+          .key(`pixelmap_${this.refreshKey}`)  // Force re-render on refresh
           .width(this.desktopWidth * this.viewScale)
           .height(this.desktopHeight * this.viewScale)
           .position({ x: this.offsetX, y: this.offsetY })

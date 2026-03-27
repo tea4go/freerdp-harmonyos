@@ -146,14 +146,13 @@ static void CallJS_ResizeOrSettings(napi_env env, napi_value js_callback, void* 
         delete cbData;
         return;
     }
-    
-    napi_value args[4];
-    napi_create_int64(env, cbData->instance, &args[0]);
-    napi_create_int32(env, cbData->width, &args[1]);
-    napi_create_int32(env, cbData->height, &args[2]);
-    napi_create_int32(env, cbData->bpp, &args[3]);
-    
-    napi_call_function(env, global, js_callback, 4, args, &result);
+
+    napi_value args[3];
+    napi_create_int32(env, cbData->width, &args[0]);
+    napi_create_int32(env, cbData->height, &args[1]);
+    napi_create_int32(env, cbData->bpp, &args[2]);
+
+    napi_call_function(env, global, js_callback, 3, args, &result);
     delete cbData;
 }
 
@@ -670,12 +669,93 @@ static napi_value FreerdpIsConnected(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-    
+
     int64_t instance = GetInt64(env, args[0]);
     bool connected = freerdp_harmonyos_is_connected(instance);
-    
+
     napi_value result;
     napi_get_boolean(env, connected, &result);
+    return result;
+}
+
+// freerdpGetFrameBuffer(instance: number): ArrayBuffer | null
+// Returns an ArrayBuffer containing the frame buffer data (RGBA format)
+static napi_value FreerdpGetFrameBuffer(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    int64_t instance = GetInt64(env, args[0]);
+    uint8_t* buffer = nullptr;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+
+    bool success = freerdp_harmonyos_get_frame_buffer(instance, &buffer, &width, &height, &stride);
+
+    if (!success || !buffer || width <= 0 || height <= 0) {
+        napi_value result;
+        napi_get_null(env, &result);
+        return result;
+    }
+
+    // Debug: Log first few pixels to verify data
+    if (buffer && height > 0 && stride > 0) {
+        LOGI("Frame buffer: %dx%d, stride=%d", width, height, stride);
+        LOGI("First 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+             buffer[0], buffer[1], buffer[2], buffer[3],
+             buffer[4], buffer[5], buffer[6], buffer[7],
+             buffer[8], buffer[9], buffer[10], buffer[11],
+             buffer[12], buffer[13], buffer[14], buffer[15]);
+    }
+
+    // Create ArrayBuffer and copy data
+    size_t buffer_size = (size_t)height * (size_t)stride;
+    void* array_buffer_data = nullptr;
+    napi_value array_buffer;
+    napi_create_arraybuffer(env, buffer_size, &array_buffer_data, &array_buffer);
+
+    if (array_buffer_data) {
+        memcpy(array_buffer_data, buffer, buffer_size);
+    }
+
+    return array_buffer;
+}
+
+// freerdpGetFrameBufferInfo(instance: number): {width: number, height: number, stride: number} | null
+// Returns frame buffer dimensions without copying the actual data
+static napi_value FreerdpGetFrameBufferInfo(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    int64_t instance = GetInt64(env, args[0]);
+    uint8_t* buffer = nullptr;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+
+    bool success = freerdp_harmonyos_get_frame_buffer(instance, &buffer, &width, &height, &stride);
+
+    if (!success || width <= 0 || height <= 0) {
+        napi_value result;
+        napi_get_null(env, &result);
+        return result;
+    }
+
+    // Create result object
+    napi_value result;
+    napi_create_object(env, &result);
+
+    napi_value width_value, height_value, stride_value;
+    napi_create_int32(env, width, &width_value);
+    napi_create_int32(env, height, &height_value);
+    napi_create_int32(env, stride, &stride_value);
+
+    napi_set_named_property(env, result, "width", width_value);
+    napi_set_named_property(env, result, "height", height_value);
+    napi_set_named_property(env, result, "stride", stride_value);
+
     return result;
 }
 
@@ -823,6 +903,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         { "freerdpGetVersion", nullptr, FreerdpGetVersion, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "freerdpHasH264", nullptr, FreerdpHasH264, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "freerdpIsConnected", nullptr, FreerdpIsConnected, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "freerdpGetFrameBuffer", nullptr, FreerdpGetFrameBuffer, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "freerdpGetFrameBufferInfo", nullptr, FreerdpGetFrameBufferInfo, nullptr, nullptr, nullptr, napi_default, nullptr },
         
         // Background mode & audio priority
         { "freerdpEnterBackgroundMode", nullptr, FreerdpEnterBackgroundMode, nullptr, nullptr, nullptr, napi_default, nullptr },
