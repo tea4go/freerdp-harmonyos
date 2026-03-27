@@ -21,9 +21,9 @@ const BOOKMARKS_STORE = 'bookmarks';
 struct Index {
   @State bookmarks: BookmarkBase[] = [];
   @State isLoading: boolean = true;
-  @State quickConnectHost: string = '192.168.52.127';
+  @State quickConnectHost: string = '192.168.100.226';
   @State quickConnectPort: string = '3389';
-  @State quickConnectUser: string = 'administrator';
+  @State quickConnectUser: string = 'tony';
   @State quickConnectPassword: string = 'testing123';
   @State showQuickConnect: boolean = false;
   @State showNativeError: boolean = false;

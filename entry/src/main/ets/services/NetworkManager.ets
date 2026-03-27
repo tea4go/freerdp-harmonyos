@@ -24,6 +24,8 @@ let netConnection: connection.NetConnection | null = null;
 let reconnectAttempts: number = 0;
 let isReconnecting: boolean = false;
 let reconnectTimerId: number = -1;
+// Only reconnect after an actual network loss (not on initial registration)
+let hadNetworkDisconnect: boolean = false;
 
 // Callbacks
 let onNetworkAvailableCallback: (() => void) | null = null;
@@ -77,8 +79,9 @@ export class NetworkManager {
           onNetworkAvailableCallback();
         }
 
-        // Trigger reconnect if we have a session to reconnect
-        if (currentSession && !isReconnecting) {
+        // Trigger reconnect only after an actual network loss (not on initial registration)
+        if (currentSession && !isReconnecting && hadNetworkDisconnect) {
+          hadNetworkDisconnect = false;
           NetworkManager.startReconnect();
         }
       });
@@ -87,6 +90,7 @@ export class NetworkManager {
       netConnection.on('netLost', (netHandle: connection.NetHandle) => {
         console.warn(`${TAG}: Network lost: netId=${netHandle.netId}`);
         isNetworkAvailable = false;
+        hadNetworkDisconnect = true;
         
         if (onNetworkLostCallback) {
           onNetworkLostCallback();
@@ -149,6 +153,7 @@ export class NetworkManager {
    */
   static clearSessionInfo(): void {
     currentSession = null;
+    hadNetworkDisconnect = false;
     NetworkManager.cancelReconnect();
     console.info(`${TAG}: Session info cleared`);
   }

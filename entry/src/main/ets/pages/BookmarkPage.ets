@@ -52,12 +52,12 @@ struct BookmarkPage {
   @State bookmark: BookmarkBase = new ManualBookmark();
 
   // Basic settings
-  @State label: string = '192.168.52.127';
-  @State hostname: string = '192.168.52.127';
-  @State port: string = '3389';
-  @State username: string = 'administrator';
+  @State label: string = '192.168.52.3';
+  @State hostname: string = '192.168.52.3';
+  @State port: string = '8444';
+  @State username: string = 'tony';
   @State domain: string = '';
-  @State password: string = 'testing123';
+  @State password: string = 'abc@123ABCDE';
 
   // Screen settings
   @State screenWidth: string = '1920';
