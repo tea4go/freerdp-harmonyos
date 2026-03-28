@@ -352,6 +352,7 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复 PixelMap 不刷新黑屏：writeBufferToPixels 后需要"清空再赋值" @State 才能触发 Image 重绘 |
 | 2026-03-28 | 修复重连后 instance 不更新导致图形无法显示：onConnectionSuccess 更新 session instance |
 | 2026-03-28 | 完整修复图形渲染管道：恢复所有被注释的回调，修复 N-API 导出，实现 SessionPage 图形处理 |
 | 2026-03-28 | 修复图像缓冲区复制：native 层 updateGraphics 只复制局部区域到 (0,0)，改为复制全屏 |

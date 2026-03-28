@@ -298,9 +298,9 @@ export class NetworkManager {
       };
       
       const performanceFlags: PerformanceFlags = {
-        remoteFX: true,
-        gfx: true,
-        h264: true,
+        remoteFX: false,
+        gfx: false,
+        h264: false,
         wallpaper: false,
         fullWindowDrag: false,
         menuAnimations: false,

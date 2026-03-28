@@ -1,5 +1,7 @@
 # FreeRDP HarmonyOS 在 macOS 编译指南
 
+
+主机和容器现在是客户在采, 我们没有权限监控
 ## 项目概述
 
 本项目是基于 FreeRDP 3.x 的 HarmonyOS NEXT 远程桌面客户端。
@@ -410,6 +412,7 @@ git push origin hmrdp
 | 日期 | 修改内容 |
 |------|---------|
 | 2026-03-28 | 创建 macOS 编译指南 |
+| 2026-03-28 | 修复黑屏问题：禁用GFX管道 + 强制Alpha=0xFF |
 
 ---
 
@@ -510,6 +513,161 @@ return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
 **修复文件**: `entry/src/main/cpp/harmonyos_freerdp.cpp` 第 1113 行
 
 **经验教训**: `freerdp_image_copy` 的目标 stride 必须与目标 buffer 的行宽一致（全屏宽度），而非更新区域的宽度。ArkTS 层传入的是全屏大小的 buffer，因此需要复制整个 GDI 缓冲区。
+
+---
+
+### 13.5 问题: 重连后画面仍然黑屏（session instance 未同步）
+
+**现象**: 第一次连接断开后自动重连，画面一直黑屏
+
+**根本原因**: `NetworkManager.doReconnect()` 创建新 FreeRDP instance，但 `SessionPage.session.getInstance()` 仍返回旧 instance。`updateGraphicsRegion` 用旧 instance 调用 `freerdp_harmonyos_update_graphics`，旧 GDI buffer 已释放返回 `false`。
+
+**修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `onConnectionSuccess()` 方法
+
+```typescript
+// ✅ 正确：每次连接成功都更新 session 持有的 instance 指针
+const oldInst = this.session.getInstance();
+if (oldInst !== instance) {
+    this.session.setInstance(instance);
+    GlobalSessionManager.registerSession(instance, this.session);
+}
+```
+
+---
+
+### 13.6 问题: PixelMap 内容更新后 Image 组件不重绘（黑屏）
+
+**现象**: `writeBufferToPixels` 调用成功，但屏幕一直显示黑屏
+
+**根本原因**: HarmonyOS ArkTS 的响应式系统基于**引用变化**检测状态更新。`writeBufferToPixels()` 只修改了 PixelMap 的内部像素数据，但 `@State pixelMap` 的引用没有变化。ArkTS 框架检测不到"变化"，不触发 Image 组件重绘。
+
+**错误代码**:
+```typescript
+// ❌ 错误：只更新内容，引用不变，UI 不重绘
+this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+    this.isUpdatingPixelMap = false;  // Image 仍然显示旧内容（黑屏）
+});
+```
+
+**正确代码**:
+```typescript
+// ✅ 正确：更新内容后，通过"清空再赋值"强制触发引用变化
+this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+    const pm = this.pixelMap;
+    this.pixelMap = null;    // 触发 @State 变化（Image 暂时为空）
+    this.pixelMap = pm;      // 再赋值（Image 用新内容重绘）
+    this.isUpdatingPixelMap = false;
+});
+```
+
+**修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `updateGraphicsRegion()` 方法
+
+**经验教训**: HarmonyOS `@State` / `@Prop` 响应式系统对引用类型（如 PixelMap）只追踪引用变化，不追踪内容变化。`writeBufferToPixels` 更新 PixelMap 像素数据后，必须通过重新赋值 `@State` 变量来触发 UI 重绘。
+
+---
+
+### 13.7 问题: GDI 缓冲区全黑（高级编解码器绕过 GDI 管道）
+
+**现象**: 连接成功，`OnGraphicsUpdate` 回调正常触发，帧数据复制正常，但像素值全为 `B=0 G=0 R=0 A=255`（全黑）
+
+**根本原因**:
+
+1. **GFX/H264/RemoteFX 绕过 `gdi->primary_buffer`**: 当连接参数包含 `/gfx`、`/rfx`、`/gfx:AVC444` 时，服务器使用高级编解码管道。此时帧数据写入 GFX 专属缓冲区，`gdi->primary_buffer` 从不更新，始终保持全零（黑色）。
+
+2. **`gdi_init` 格式参数错误**: `gdi_init(instance, PIXEL_FORMAT_RGBX32)` 与后续 `freerdp_harmonyos_update_graphics` 中的 `PIXEL_FORMAT_BGRA32` 目标格式不一致，虽然 `freerdp_image_copy` 会做格式转换，但应保持一致。
+
+**错误配置**:
+```typescript
+// ❌ 错误：BookmarkBase.ets 默认全部启用高级编解码器
+performanceFlags: PerformanceFlags = {
+    remoteFX: true,  // 添加 /rfx 参数
+    gfx: true,       // 添加 /gfx 参数
+    h264: true,      // 添加 /gfx:AVC444 参数
+    ...
+}
+```
+
+```cpp
+// ❌ 错误：gdi_init 使用 RGBX32 而非 BGRA32
+if (!gdi_init(instance, PIXEL_FORMAT_RGBX32)) {
+```
+
+**正确配置**:
+```typescript
+// ✅ 正确：禁用高级编解码器，强制使用基础位图模式（写入 gdi->primary_buffer）
+performanceFlags: PerformanceFlags = {
+    remoteFX: false,  // 不添加 /rfx
+    gfx: false,       // 不添加 /gfx
+    h264: false,      // 不添加 /gfx:AVC444
+    ...
+}
+```
+
+```cpp
+// ✅ 正确：gdi_init 使用 BGRA32，与输出格式一致
+if (!gdi_init(instance, PIXEL_FORMAT_BGRA32)) {
+```
+
+**修复文件**:
+- `entry/src/main/ets/model/BookmarkBase.ets`（第 111-113 行）
+- `entry/src/main/ets/services/NetworkManager.ets`（`doReconnect()` 中第 301-303 行）
+- `entry/src/main/cpp/harmonyos_freerdp.cpp`（第 480 行）
+
+**经验教训**: 在 GFX 管道启用时，`gdi->primary_buffer` 不接收任何数据。必须禁用 `/gfx`、`/rfx`、`/gfx:AVC444` 等高级编解码器参数，强制服务器使用基础 RDP 位图协议，才能保证 `gdi->primary_buffer` 有有效的像素数据。
+
+---
+
+### 13.8 问题: FreeRDP_SupportGraphicsPipeline=TRUE 导致 GFX 管道被协商（持续黑屏）
+
+**现象**: BookmarkBase 中已禁用 gfx/remoteFX/h264，但屏幕仍然黑屏
+
+**根本原因**: `freerdp_harmonyos_parse_arguments()` 中硬编码了：
+```cpp
+freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+```
+这向服务器广播客户端支持 GFX 管道能力。即使命令行参数中未包含 `/gfx`，服务器仍可能主动协商使用 GFX 管道。一旦服务器使用 GFX 管道，`gdi->primary_buffer` 永远不会收到像素数据，导致持续黑屏。
+
+**修复**: 将 `FreeRDP_SupportGraphicsPipeline` 设为 FALSE，强制使用传统 RDP 位图模式。
+
+```cpp
+// ❌ 错误：允许服务器协商 GFX 管道
+freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+
+// ✅ 正确：禁用 GFX 管道协商，强制传统位图模式
+freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, FALSE);
+freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportDynamicChannels, FALSE);
+```
+
+**修复文件**: `entry/src/main/cpp/harmonyos_freerdp.cpp` - `freerdp_harmonyos_parse_arguments()` 函数
+
+---
+
+### 13.9 问题: GDI 缓冲区 Alpha 通道为 0（像素透明显示黑屏）
+
+**现象**: 连接成功，像素有 RGB 值但 Alpha=0，屏幕仍显示黑色
+
+**根本原因**: FreeRDP GDI 在某些渲染路径下可能不设置 Alpha 通道（保持为 0）。`gdi_init()` 用 `calloc` 初始化缓冲区，所有字节为 0（A=0）。HarmonyOS `BGRA_8888` 格式将 Alpha=0 解释为完全透明，透过图片看到黑色背景。
+
+**修复**: 在 `freerdp_harmonyos_update_graphics()` 中，图像复制后强制所有像素 Alpha=0xFF：
+
+```cpp
+// 复制 GDI 缓冲区到输出缓冲区
+BOOL result = freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+                                 gdi->width, gdi->height,
+                                 gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
+                                 &gdi->palette, FREERDP_FLIP_NONE);
+
+if (result) {
+    // 强制 Alpha=0xFF，防止透明像素显示为黑色
+    size_t pixelCount = (size_t)gdi->width * (size_t)gdi->height;
+    uint32_t* pixels = (uint32_t*)buffer;
+    for (size_t i = 0; i < pixelCount; i++) {
+        pixels[i] |= 0xFF000000U;  // 设置 Alpha 字节(最高字节)为 255
+    }
+}
+```
+
+**修复文件**: `entry/src/main/cpp/harmonyos_freerdp.cpp` - `freerdp_harmonyos_update_graphics()` 函数
 
 ---
 

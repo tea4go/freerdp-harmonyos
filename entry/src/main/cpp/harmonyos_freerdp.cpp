@@ -477,7 +477,7 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     }
 
     LOGI("harmonyos_post_connect: Calling gdi_init...");
-    if (!gdi_init(instance, PIXEL_FORMAT_RGBX32)) {
+    if (!gdi_init(instance, PIXEL_FORMAT_BGRA32)) {
         LOGE("harmonyos_post_connect: gdi_init failed");
         return FALSE;
     }
@@ -1059,8 +1059,14 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
     
     /* 额外的稳定连接设置 */
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportMonitorLayoutPdu, FALSE);
-    freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
-    freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportDynamicChannels, TRUE);
+    /*
+     * 关键修复：禁用 GFX 管道协商，强制使用传统 RDP 位图模式。
+     * 原因：FreeRDP_SupportGraphicsPipeline=TRUE 会向服务器广播 GFX 能力，
+     * 即使命令行未传 /gfx，服务器仍可能主动协商 GFX。
+     * 一旦服务器用 GFX 管道，gdi->primary_buffer 永远不更新，导致持续黑屏。
+     */
+    freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, FALSE);
+    freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportDynamicChannels, FALSE);
     freerdp_settings_set_string(inst->context->settings, FreeRDP_ConfigPath, ".");
     
     LOGI("parse_arguments: Security protocols set - RDP|TLS|NLA, IgnoreCertificate=TRUE");
@@ -1132,10 +1138,26 @@ bool freerdp_harmonyos_update_graphics(int64_t instance, uint8_t* buffer, int x,
 
     // Copy full GDI buffer to output buffer (BGRA32 for HarmonyOS PixelMap BGRA_8888)
     UINT32 DstFormat = PIXEL_FORMAT_BGRA32;
-    return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+    BOOL result = freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
                               gdi->width, gdi->height,
                               gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
                               &gdi->palette, FREERDP_FLIP_NONE);
+
+    if (result) {
+        /*
+         * 关键修复：强制所有像素 Alpha=0xFF（完全不透明）。
+         * 原因：FreeRDP GDI 某些渲染路径不设置 Alpha 通道（保持 0）。
+         * HarmonyOS BGRA_8888 将 Alpha=0 解释为完全透明，显示为黑色。
+         * 在小端 ARM64 上，uint32_t 的最高字节（bits 31-24）对应内存第4字节（Alpha）。
+         */
+        size_t pixelCount = (size_t)gdi->width * (size_t)gdi->height;
+        uint32_t* pixels = (uint32_t*)buffer;
+        for (size_t i = 0; i < pixelCount; i++) {
+            pixels[i] |= 0xFF000000U;  /* 设置 Alpha 字节为 255（完全不透明）*/
+        }
+    }
+
+    return (bool)result;
 }
 
 bool freerdp_harmonyos_send_cursor_event(int64_t instance, int x, int y, int flags) {
