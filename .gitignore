@@ -25,6 +25,7 @@ build/
 # Operating System Files
 # -------------------------------------------
 .DS_Store
+._*
 Thumbs.db
 desktop.ini
 
