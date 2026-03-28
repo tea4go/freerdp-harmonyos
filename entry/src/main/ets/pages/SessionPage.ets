@@ -1008,7 +1008,8 @@ struct SessionPage {
             }
 
             // ---- Delete (EXTENDED key - needs KBDEXT flag!) ----
-            if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
+            // Physical keyboard: keyCode 2071 (KEYCODE_FORWARD_DEL)
+            if (keyCode === 2056 || keyCode === 2071 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
               console.info(`${TAG}: Delete key (keyCode=${keyCode}), VK=0x${(0x2E | KBDEXT).toString(16)}`);
               sendKeyImmediate(0x2E | KBDEXT);
               this.keyEventHandled = true;
@@ -1035,7 +1036,8 @@ struct SessionPage {
             }
 
             // ---- Arrow Left (EXTENDED key) ----
-            if (keyCode === 2014 || keyCode === 21 || keyCode === 2050 || keyText === 'ArrowLeft' || keyText === 'Left') {
+            // Note: keyCode 2050 is NOT Arrow Left - it's Space on physical keyboard!
+            if (keyCode === 2014 || keyCode === 21 || keyText === 'ArrowLeft' || keyText === 'Left') {
               console.info(`${TAG}: ArrowLeft key (keyCode=${keyCode}), VK=0x${(0x25 | KBDEXT).toString(16)}`);
               sendKeyImmediate(0x25 | KBDEXT);
               this.keyEventHandled = true;
@@ -1070,20 +1072,42 @@ struct SessionPage {
               return;
             }
 
-            // ---- Space - send via Unicode (works reliably) ----
-            if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
-              console.info(`${TAG}: Space key (keyCode=${keyCode})`);
-              LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
-              LibFreeRDP.sendUnicodeKeyEvent(instance, 32, false);
+            // ---- Space (standard key, no KBDEXT needed) ----
+            // Physical keyboard: keyCode 2050 (KEYCODE_SPACE)
+            // Virtual keyboard: keyCode 62
+            if (keyCode === 2050 || keyCode === 2044 || keyCode === 62 || keyText === ' ' || keyText === 'KEYCODE_SPACE') {
+              console.info(`${TAG}: Space key (keyCode=${keyCode}), VK=0x20`);
+              sendKeyImmediate(0x20);
               this.keyEventHandled = true;
               event.stopPropagation();
               return;
             }
 
-            // ---- Printable characters: send via Unicode ----
-            // Use sendUnicodeKeyEvent for printable characters (a-z, 0-9, symbols).
-            // sendKeyEvent with VK codes doesn't work reliably for letter keys
-            // in the current FreeRDP build (scancode lookup returns 0).
+            // ---- A-Z letters (physical keyboard: keyCode 2017=A ~ 2042=Z) ----
+            // Physical keyboard sends keyCode in 2000+ range with keyText like "KEYCODE_A"
+            // Map directly to Windows VK codes (0x41=A ~ 0x5A=Z)
+            if (keyCode >= 2017 && keyCode <= 2042) {
+              const vk = keyCode - 2017 + 0x41; // 2017→0x41(A), 2018→0x42(B), etc.
+              console.info(`${TAG}: Letter key keyCode=${keyCode} → VK=0x${vk.toString(16)} (${String.fromCharCode(vk)})`);
+              sendKeyImmediate(vk);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- 0-9 numbers (physical keyboard: keyCode 2000=0 ~ 2009=9) ----
+            // Map directly to Windows VK codes (0x30=0 ~ 0x39=9)
+            if (keyCode >= 2000 && keyCode <= 2009) {
+              const vk = keyCode - 2000 + 0x30; // 2000→0x30(0), 2001→0x31(1), etc.
+              console.info(`${TAG}: Number key keyCode=${keyCode} → VK=0x${vk.toString(16)} (${String.fromCharCode(vk)})`);
+              sendKeyImmediate(vk);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Printable characters (virtual keyboard / other): send via Unicode ----
+            // Fallback for cases where keyText is a single character
             if (keyText.length === 1) {
               const charCode = keyText.charCodeAt(0);
               if (charCode >= 32) {
