@@ -958,13 +958,16 @@ struct SessionPage {
               // Mark that we're handling keyboard input
               this.remoteDesktopHasFocus = true;
 
+              // Save instance reference for setTimeout callbacks
+              const instance = this.session.getInstance();
+
               // Enter key
               if (keyCode === 2054) {  // KeyCode.KEYCODE_ENTER
                 console.info(`${TAG}: Enter key pressed`);
                 const VK_RETURN = 0x0D;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RETURN, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_RETURN, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RETURN, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_RETURN, false);
                 }, 10);
                 return;
               }
@@ -973,9 +976,9 @@ struct SessionPage {
               if (keyCode === 2044) {  // KeyCode.KEYCODE_SPACE
                 console.info(`${TAG}: Space key pressed`);
                 const spaceCharCode = 32;
-                LibFreeRDP.sendUnicodeKeyEvent(this.session.getInstance(), spaceCharCode, true);
+                LibFreeRDP.sendUnicodeKeyEvent(instance, spaceCharCode, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendUnicodeKeyEvent(this.session.getInstance(), spaceCharCode, false);
+                  LibFreeRDP.sendUnicodeKeyEvent(instance, spaceCharCode, false);
                 }, 10);
                 return;
               }
@@ -984,9 +987,9 @@ struct SessionPage {
               if (keyCode === 2055) {  // KeyCode.KEYCODE_DEL / KEYCODE_BACK
                 console.info(`${TAG}: Backspace key pressed`);
                 const VK_BACK = 0x08;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_BACK, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_BACK, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_BACK, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_BACK, false);
                 }, 10);
                 // Clear one character from input
                 if (this.keyboardInputText.length > 0) {
@@ -1000,36 +1003,36 @@ struct SessionPage {
               if (keyCode === 2012) {  // KEYCODE_DPAD_UP
                 console.info(`${TAG}: Up arrow key pressed`);
                 const VK_UP = 0x26;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_UP, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_UP, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_UP, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_UP, false);
                 }, 10);
                 return;
               }
               if (keyCode === 2013) {  // KEYCODE_DPAD_DOWN
                 console.info(`${TAG}: Down arrow key pressed`);
                 const VK_DOWN = 0x28;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DOWN, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_DOWN, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DOWN, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_DOWN, false);
                 }, 10);
                 return;
               }
               if (keyCode === 2014) {  // KEYCODE_DPAD_LEFT
                 console.info(`${TAG}: Left arrow key pressed`);
                 const VK_LEFT = 0x25;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_LEFT, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_LEFT, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_LEFT, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_LEFT, false);
                 }, 10);
                 return;
               }
               if (keyCode === 2015) {  // KEYCODE_DPAD_RIGHT
                 console.info(`${TAG}: Right arrow key pressed`);
                 const VK_RIGHT = 0x27;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RIGHT, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_RIGHT, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_RIGHT, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_RIGHT, false);
                 }, 10);
                 return;
               }
@@ -1038,9 +1041,9 @@ struct SessionPage {
               if (keyCode === 2049) {  // KeyCode.KEYCODE_TAB
                 console.info(`${TAG}: Tab key pressed`);
                 const VK_TAB = 0x09;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_TAB, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_TAB, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_TAB, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_TAB, false);
                 }, 10);
                 return;
               }
@@ -1049,9 +1052,9 @@ struct SessionPage {
               if (keyCode === 2056) {  // KeyCode.KEYCODE_FORWARD_DEL
                 console.info(`${TAG}: Delete key pressed`);
                 const VK_DELETE = 0x2E;
-                LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DELETE, true);
+                LibFreeRDP.sendKeyEvent(instance, VK_DELETE, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(this.session.getInstance(), VK_DELETE, false);
+                  LibFreeRDP.sendKeyEvent(instance, VK_DELETE, false);
                 }, 10);
                 return;
               }
