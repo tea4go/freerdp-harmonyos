@@ -759,8 +759,6 @@ struct SessionPage {
         .width('100%')
         .height('100%')
         .backgroundColor('#000000')
-        .focusable(true)
-        .defaultFocus(true)
         .onAreaChange((oldValue: Area, newValue: Area) => {
           // Track screen dimensions for coordinate conversion
           this.screenWidth = newValue.width as number;
