@@ -8,6 +8,7 @@
  */
 
 import freerdpNativeImport from 'libfreerdp_harmonyos.so';
+import image from '@ohos.multimedia.image';
 
 interface FreerdpNative {
   setOnConnectionSuccess(callback: (instance: number) => void): void;
@@ -923,3 +924,25 @@ export class LibFreeRDP {
 }
 
 export default LibFreeRDP;
+
+/**
+ * Shared graphics buffer for direct pixel-level rendering
+ * SessionPage sets this, SessionView reads it
+ * (Avoids ArkTS @Prop deep-copying ArrayBuffer)
+ */
+export let sharedGraphicsBuffer: ArrayBuffer | null = null;
+
+export function setSharedGraphicsBuffer(buf: ArrayBuffer | null): void {
+  sharedGraphicsBuffer = buf;
+}
+
+/**
+ * Shared PixelMap for Canvas drawImage rendering
+ * SessionPage creates new PixelMap each frame, SessionView draws it via Canvas drawImage
+ * (Canvas putImageData is broken on HarmonyOS - data written but not rendered)
+ */
+export let sharedPixelMap: image.PixelMap | null = null;
+
+export function setSharedPixelMap(pm: image.PixelMap | null): void {
+  sharedPixelMap = pm;
+}

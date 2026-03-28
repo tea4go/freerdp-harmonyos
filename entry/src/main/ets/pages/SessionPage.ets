@@ -13,7 +13,7 @@ import common from '@ohos.app.ability.common';
 import image from '@ohos.multimedia.image';
 import { BookmarkBase } from '../model/BookmarkBase';
 import { SessionState, ConnectionState, GlobalSessionManager } from '../model/SessionState';
-import LibFreeRDP, { EventListener, UIEventListener, BookmarkSettings, ScreenSettings, AdvancedSettings, PerformanceFlags, DebugSettings, GatewaySettings } from '../services/LibFreeRDP';
+import LibFreeRDP, { EventListener, UIEventListener, BookmarkSettings, ScreenSettings, AdvancedSettings, PerformanceFlags, DebugSettings, GatewaySettings, setSharedGraphicsBuffer, setSharedPixelMap } from '../services/LibFreeRDP';
 import { RdpBackgroundService } from '../services/RdpBackgroundService';
 import { NetworkManager, SessionInfo } from '../services/NetworkManager';
 import { SessionView } from '../components/SessionView';
@@ -145,8 +145,6 @@ struct SessionPage {
   private graphicsBuffer: ArrayBuffer | null = null;
   private isUpdatingPixelMap: boolean = false;
   private pixelMapOpts: image.InitializationOptions | null = null;
-  // 双缓冲：保留上一帧 PixelMap，延迟一帧释放，避免 GPU 正在渲染时被释放导致黑屏
-  private prevPixelMap: image.PixelMap | null = null;
   
   // UI state
   @State showToolbar: boolean = true;
@@ -359,6 +357,8 @@ struct SessionPage {
     this.desktopWidth = width;
     this.desktopHeight = height;
     this.graphicsBuffer = new ArrayBuffer(width * height * 4);
+    // Share buffer reference with SessionView (avoids @Prop deep copy)
+    setSharedGraphicsBuffer(this.graphicsBuffer);
     this.pixelMapOpts = {
       size: { width: width, height: height },
       pixelFormat: image.PixelMapFormat.BGRA_8888,
@@ -388,7 +388,6 @@ struct SessionPage {
     const inst = this.session.getInstance();
     const success = LibFreeRDP.updateGraphics(inst, this.graphicsBuffer, x, y, width, height);
     if (success) {
-      // 前10帧：验证像素数据并记录日志
       this.frameCount++;
       if (this.frameCount <= 10) {
         const w = this.desktopWidth;
@@ -401,31 +400,22 @@ struct SessionPage {
           `(center)=B${pxMid[0]}G${pxMid[1]}R${pxMid[2]}A${pxMid[3]}`);
       }
 
-      if (this.pixelMap) {
-        // 每帧创建新 PixelMap → 新引用 → @State 检测到变化 → Image 强制重新读取像素数据
-        // 双缓冲：保留前一帧 PixelMap 延迟释放，避免 GPU 正在渲染时 PixelMap 被释放导致黑屏
-        const opts = this.pixelMapOpts!;
-        const buf = this.graphicsBuffer!;
-        const oldPm = this.pixelMap;
-        image.createPixelMap(buf, opts).then((newPm: image.PixelMap) => {
-          // 释放前前一帧（双缓冲：当前帧 oldPm 仍在渲染，释放 prevPixelMap 安全）
-          if (this.prevPixelMap) {
-            this.prevPixelMap.release();
-          }
-          this.prevPixelMap = oldPm;  // 当前帧的旧 PixelMap 保留给 GPU 渲染
-          this.pixelMap = newPm;  // 新引用 → @State 变化 → @Prop 传播 → Image 重绘
-          this.isUpdatingPixelMap = false;
-          if (this.frameCount <= 10) {
-            console.info(`${TAG}: frame#${this.frameCount} createPixelMap OK, double-buffer`);
-          }
-        }).catch((e: Error) => {
-          console.error(`${TAG}: createPixelMap failed: ${e}`);
-          this.isUpdatingPixelMap = false;
-        });
-      } else {
-        console.warn(`${TAG}: pixelMap is null, skipping update`);
+      // 每帧创建新 PixelMap，确保 Canvas drawImage 读取最新数据
+      // writeBufferToPixels 更新的数据 Canvas 不会重新读取（缓存问题）
+      const opts = this.pixelMapOpts;
+      const buf = this.graphicsBuffer;
+      image.createPixelMap(buf, opts).then((newPm: image.PixelMap) => {
+        this.pixelMap = newPm;
+        setSharedPixelMap(newPm);
+        this.renderVersion++;
         this.isUpdatingPixelMap = false;
-      }
+        if (this.frameCount <= 10) {
+          console.info(`${TAG}: frame#${this.frameCount} createPixelMap OK, renderVersion=${this.renderVersion}`);
+        }
+      }).catch((e: Error) => {
+        console.error(`${TAG}: createPixelMap failed: ${e}`);
+        this.isUpdatingPixelMap = false;
+      });
     } else {
       console.warn(`${TAG}: updateGraphics FAILED inst=${inst}`);
       this.isUpdatingPixelMap = false;
@@ -773,7 +763,6 @@ struct SessionPage {
           instance: this.session?.getInstance() ?? 0,
           desktopWidth: this.desktopWidth,
           desktopHeight: this.desktopHeight,
-          pixelMap: this.pixelMap,
           renderVersion: this.renderVersion
         })
       } else {

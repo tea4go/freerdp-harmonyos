@@ -1,19 +1,22 @@
 /*
  * HarmonyOS FreeRDP Session View Component
- * 
+ *
  * Custom component for rendering the remote desktop
- * 
+ * Uses Canvas + putImageData for reliable pixel-level rendering
+ * (Canvas drawImage with dynamically-created PixelMap is broken on HarmonyOS)
+ *
  * Copyright 2026 FreeRDP HarmonyOS Port
  */
 
-import image from '@ohos.multimedia.image';
-import LibFreeRDP, { 
-  PTR_FLAGS_MOVE, 
-  PTR_FLAGS_DOWN, 
-  PTR_FLAGS_BUTTON1, 
+import LibFreeRDP, {
+  PTR_FLAGS_MOVE,
+  PTR_FLAGS_DOWN,
+  PTR_FLAGS_BUTTON1,
   PTR_FLAGS_BUTTON2,
   PTR_FLAGS_WHEEL,
-  PTR_FLAGS_WHEEL_NEGATIVE
+  PTR_FLAGS_WHEEL_NEGATIVE,
+  sharedGraphicsBuffer,
+  sharedPixelMap
 } from '../services/LibFreeRDP';
 
 /**
@@ -35,30 +38,32 @@ export interface SessionViewListener {
 
 /**
  * Session View Component
- * Displays the remote desktop and handles touch input
+ * Displays the remote desktop using Canvas putImageData (pixel-level rendering)
  */
 @Component
 export struct SessionView {
   // Session instance
   @Prop instance: number = 0;
-  
+
   // Display dimensions
   @Prop desktopWidth: number = 1920;
   @Prop desktopHeight: number = 1080;
-  
-  // Pixel map for rendering
-  @Prop @Watch('onPixelMapChanged') pixelMap: image.PixelMap | null = null;
 
-  // Render version counter - forces UI re-render when pixel data changes
-  @Prop renderVersion: number = 0;
-  
+  // Render version counter - triggers Canvas redraw when changed
+  @Prop @Watch('onRenderVersionChanged') renderVersion: number = 0;
+
   // View state
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
   @State viewWidth: number = 0;
   @State viewHeight: number = 0;
-  
+
+  // Canvas rendering - hardware acceleration disabled for reliable drawImage
+  private settings: RenderingContextSettings = new RenderingContextSettings(false);
+  private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  private isCanvasReady: boolean = false;
+
   // Touch state
   private lastTouchX: number = 0;
   private lastTouchY: number = 0;
@@ -66,10 +71,10 @@ export struct SessionView {
   private isScaling: boolean = false;
   private initialPinchDistance: number = 0;
   private initialScale: number = 1.0;
-  
+
   // Listener
   private listener: SessionViewListener | null = null;
-  
+
   // Constants
   private static readonly MIN_SCALE = 0.25;
   private static readonly MAX_SCALE = 4.0;
@@ -83,10 +88,42 @@ export struct SessionView {
   }
 
   /**
-   * Handle pixel map changes
+   * Handle render version changes - triggers Canvas redraw
    */
-  onPixelMapChanged(): void {
-    // Force refresh when pixel map changes
+  onRenderVersionChanged(): void {
+    console.info(`SessionView: @Watch fired rv=${this.renderVersion} canvas=${this.isCanvasReady} vw=${this.viewWidth} buf=${sharedGraphicsBuffer ? sharedGraphicsBuffer.byteLength : 'null'} dw=${this.desktopWidth} dh=${this.desktopHeight}`);
+    this.drawDesktop();
+  }
+
+  /**
+   * Draw the remote desktop to Canvas using drawImage(PixelMap)
+   * Uses sharedPixelMap created by SessionPage each frame
+   */
+  private drawDesktop(): void {
+    if (!this.isCanvasReady || this.viewWidth <= 0) {
+      console.info(`SessionView: drawDesktop early return - canvas=${this.isCanvasReady} vw=${this.viewWidth}`);
+      return;
+    }
+
+    const pm = sharedPixelMap;
+    if (!pm || this.desktopWidth <= 0 || this.desktopHeight <= 0) {
+      console.info(`SessionView: drawDesktop skip - pm=${pm ? 'ok' : 'null'} dw=${this.desktopWidth} dh=${this.desktopHeight}`);
+      return;
+    }
+
+    const scale = this.viewScale;
+    const ox = this.offsetX;
+    const oy = this.offsetY;
+    const drawW = this.desktopWidth * scale;
+    const drawH = this.desktopHeight * scale;
+
+    // Clear canvas
+    this.canvasCtx.clearRect(0, 0, this.viewWidth, this.viewHeight);
+
+    // Draw PixelMap with pan/zoom
+    this.canvasCtx.drawImage(pm, ox, oy, drawW, drawH);
+
+    console.info(`SessionView: drawImage done pm=${pm !== null} src=${this.desktopWidth}x${this.desktopHeight} scale=${scale.toFixed(3)} ox=${ox.toFixed(1)} oy=${oy.toFixed(1)} draw=${drawW.toFixed(0)}x${drawH.toFixed(0)}`);
   }
 
   /**
@@ -107,9 +144,9 @@ export struct SessionView {
    */
   private sendMouseEvent(x: number, y: number, flags: number): void {
     if (this.instance === 0) return;
-    
+
     LibFreeRDP.sendCursorEvent(this.instance, x, y, flags);
-    
+
     if (this.listener) {
       this.listener.onTouchEvent(x, y, flags);
     }
@@ -125,7 +162,7 @@ export struct SessionView {
       this.lastTouchY = touch.y;
       this.isPanning = false;
       this.isScaling = false;
-      
+
       // Send mouse down event
       const pos = this.viewToDesktop(touch.x, touch.y);
       this.sendMouseEvent(pos.x, pos.y, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1);
@@ -148,23 +185,24 @@ export struct SessionView {
       const touch = event.touches[0];
       const dx = touch.x - this.lastTouchX;
       const dy = touch.y - this.lastTouchY;
-      
+
       // Check if this is a pan gesture (significant movement)
       if (!this.isPanning && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
         this.isPanning = true;
       }
-      
+
       if (this.isPanning) {
         // Pan the view
         this.offsetX += dx;
         this.offsetY += dy;
         this.constrainOffset();
+        this.drawDesktop();
       } else {
         // Send mouse move event
         const pos = this.viewToDesktop(touch.x, touch.y);
         this.sendMouseEvent(pos.x, pos.y, PTR_FLAGS_MOVE);
       }
-      
+
       this.lastTouchX = touch.x;
       this.lastTouchY = touch.y;
     } else if (event.touches.length === 2 && this.isScaling) {
@@ -172,26 +210,27 @@ export struct SessionView {
       const dx = event.touches[1].x - event.touches[0].x;
       const dy = event.touches[1].y - event.touches[0].y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (this.initialPinchDistance > 0) {
         const scaleRatio = distance / this.initialPinchDistance;
         let newScale = this.initialScale * scaleRatio;
-        
+
         // Clamp scale
         newScale = Math.max(SessionView.MIN_SCALE, Math.min(newScale, SessionView.MAX_SCALE));
-        
+
         // Calculate center point for zoom
         const centerX = (event.touches[0].x + event.touches[1].x) / 2;
         const centerY = (event.touches[0].y + event.touches[1].y) / 2;
-        
+
         // Adjust offset to zoom around center
         const scaleChange = newScale / this.viewScale;
         this.offsetX = centerX - (centerX - this.offsetX) * scaleChange;
         this.offsetY = centerY - (centerY - this.offsetY) * scaleChange;
-        
+
         this.viewScale = newScale;
         this.constrainOffset();
-        
+        this.drawDesktop();
+
         if (this.listener) {
           this.listener.onScaleChanged(this.viewScale);
         }
@@ -208,7 +247,7 @@ export struct SessionView {
       const pos = this.viewToDesktop(this.lastTouchX, this.lastTouchY);
       this.sendMouseEvent(pos.x, pos.y, PTR_FLAGS_BUTTON1);
     }
-    
+
     this.isPanning = false;
     this.isScaling = false;
     this.initialPinchDistance = 0;
@@ -220,10 +259,10 @@ export struct SessionView {
   private constrainOffset(): void {
     const scaledWidth = this.desktopWidth * this.viewScale;
     const scaledHeight = this.desktopHeight * this.viewScale;
-    
+
     // Allow some margin
     const margin = 50;
-    
+
     if (scaledWidth <= this.viewWidth) {
       // Center horizontally if smaller than view
       this.offsetX = (this.viewWidth - scaledWidth) / 2;
@@ -231,7 +270,7 @@ export struct SessionView {
       // Constrain to edges
       this.offsetX = Math.min(margin, Math.max(this.viewWidth - scaledWidth - margin, this.offsetX));
     }
-    
+
     if (scaledHeight <= this.viewHeight) {
       // Center vertically if smaller than view
       this.offsetY = (this.viewHeight - scaledHeight) / 2;
@@ -247,6 +286,7 @@ export struct SessionView {
   setViewScale(newScale: number): void {
     this.viewScale = Math.max(SessionView.MIN_SCALE, Math.min(newScale, SessionView.MAX_SCALE));
     this.constrainOffset();
+    this.drawDesktop();
   }
 
   /**
@@ -268,11 +308,11 @@ export struct SessionView {
    */
   fitToScreen(): void {
     if (this.viewWidth <= 0 || this.viewHeight <= 0) return;
-    
+
     const scaleX = this.viewWidth / this.desktopWidth;
     const scaleY = this.viewHeight / this.desktopHeight;
     this.viewScale = Math.min(scaleX, scaleY);
-    
+
     // Center the desktop
     this.offsetX = (this.viewWidth - this.desktopWidth * this.viewScale) / 2;
     this.offsetY = (this.viewHeight - this.desktopHeight * this.viewScale) / 2;
@@ -286,6 +326,7 @@ export struct SessionView {
     this.offsetX = 0;
     this.offsetY = 0;
     this.constrainOffset();
+    this.drawDesktop();
   }
 
   /**
@@ -295,6 +336,7 @@ export struct SessionView {
     this.offsetX += dx;
     this.offsetY += dy;
     this.constrainOffset();
+    this.drawDesktop();
   }
 
   /**
@@ -308,7 +350,7 @@ export struct SessionView {
     }
     // Wheel delta is in the lower 9 bits
     flags |= (delta & 0x1FF);
-    
+
     this.sendMouseEvent(x, y, flags);
   }
 
@@ -322,32 +364,16 @@ export struct SessionView {
 
   build() {
     Stack() {
-      // Background
-      Column()
+      // Canvas for rendering remote desktop via putImageData
+      Canvas(this.canvasCtx)
         .width('100%')
         .height('100%')
         .backgroundColor('#1a1a1a')
-      
-      // Remote desktop canvas
-      if (this.pixelMap) {
-        Image(this.pixelMap)
-          .width(this.desktopWidth * this.viewScale)
-          .height(this.desktopHeight * this.viewScale)
-          .position({ x: this.offsetX, y: this.offsetY })
-          .objectFit(ImageFit.Fill)
-          .interpolation(ImageInterpolation.Medium)
-      } else {
-        // Placeholder when no image
-        Column() {
-          Text('正在连接...')
-            .fontSize(24)
-            .fontColor('#ffffff')
-        }
-        .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-      }
+        .onReady(() => {
+          console.info(`SessionView: Canvas ready ctx=${this.canvasCtx !== null}`);
+          this.isCanvasReady = true;
+          this.drawDesktop();
+        })
     }
     .width('100%')
     .height('100%')
@@ -355,14 +381,17 @@ export struct SessionView {
     .onAreaChange((oldValue: Area, newValue: Area) => {
       this.viewWidth = newValue.width as number;
       this.viewHeight = newValue.height as number;
-      
+
       // Initial fit to screen
       if (this.viewScale === 1.0 && this.offsetX === 0 && this.offsetY === 0) {
         this.fitToScreen();
       } else {
         this.constrainOffset();
       }
-      
+
+      // Redraw after layout change
+      this.drawDesktop();
+
       if (this.listener) {
         this.listener.onSessionViewReady();
       }

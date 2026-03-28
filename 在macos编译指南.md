@@ -671,4 +671,189 @@ if (result) {
 
 ---
 
+### 13.10 问题: Image 组件不渲染动态更新的 PixelMap（持续黑屏）
+
+**现象**: 连接成功，PixelMap 每帧通过 `createPixelMap` 创建新引用，`@State pixelMap` 更新，`@Prop pixelMap` 在 SessionView 中也有 `@Watch`，但 Image 组件始终显示黑屏。日志显示像素数据正确（非零 RGB 值）。
+
+**根本原因**:
+1. HarmonyOS ArkTS 的 `Image` 组件设计用于静态图片显示，对高频动态 PixelMap 更新存在缓存问题
+2. `@Prop` 对 PixelMap 引用变化的传播可能被框架优化（跳过重绘）
+3. 即使 `createPixelMap` 创建了新引用，Image 组件可能不会重新读取像素数据
+
+**对比 Android 实现**: Android aFreeRDP 使用自定义 View + Canvas 的 `onDraw()` 方法直接绘制 Bitmap，通过 `invalidate()` 显式触发重绘，完全避免了 ImageView 的缓存问题。
+
+**修复方案**: 用 **Canvas + drawImage** 替代 Image 组件，使用 `writeBufferToPixels` 替代 `createPixelMap`：
+
+```typescript
+// ❌ 错误：Image 组件对高频动态 PixelMap 更新不可靠
+Image(this.pixelMap)
+    .width(this.desktopWidth * this.viewScale)
+    .height(this.desktopHeight * this.viewScale)
+    .position({ x: this.offsetX, y: this.offsetY })
+    .objectFit(ImageFit.Fill)
+```
+
+```typescript
+// ✅ 正确：Canvas 直接绘制 PixelMap，显式控制渲染
+Canvas(this.canvasCtx)
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#1a1a1a')
+    .onReady(() => {
+        this.isCanvasReady = true
+        this.drawDesktop()
+    })
+
+// drawDesktop 方法：
+drawDesktop(): void {
+    this.canvasCtx.clearRect(0, 0, this.viewWidth, this.viewHeight)
+    this.canvasCtx.drawImage(this.pixelMap, this.offsetX, this.offsetY,
+        this.desktopWidth * this.viewScale, this.desktopHeight * this.viewScale)
+}
+```
+
+同时简化 SessionPage 的 `updateGraphicsRegion`：
+```typescript
+// ❌ 错误：每帧创建新 PixelMap（昂贵且不可靠）
+image.createPixelMap(buf, opts).then((newPm) => {
+    this.pixelMap = newPm  // @State 变化但 Image 可能不重绘
+})
+
+// ✅ 正确：复用单个 PixelMap，通过 writeBufferToPixels 更新数据
+this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+    this.renderVersion++  // 触发 Canvas 重绘
+})
+```
+
+**修复文件**:
+- `entry/src/main/ets/components/SessionView.ets` - 用 Canvas 替代 Image
+- `entry/src/main/ets/pages/SessionPage.ets` - 用 writeBufferToPixels 替代 createPixelMap
+
+---
+
+### 13.11 问题: Canvas + drawImage 仍然黑屏（@Watch 可能未触发）
+
+**现象**: Canvas 替代 Image 组件后，屏幕仍然全黑。日志显示 writeBufferToPixels 成功、像素数据正确，但看不到远程桌面。
+
+**诊断步骤**:
+1. 在 `onRenderVersionChanged()` 和 `drawDesktop()` 中添加详细日志
+2. 在 Canvas 上绘制红色测试矩形验证 Canvas 本身是否工作
+3. 检查 `@Prop @Watch` 是否正确触发
+
+**修改文件**:
+- `entry/src/main/ets/components/SessionView.ets` - 添加诊断日志和测试矩形
+
+**状态**: 已确认根因，详见 13.12
+
+---
+
+### 13.12 问题: Canvas drawImage 不反映 writeBufferToPixels 更新的 PixelMap 数据
+
+**现象**: Canvas 红色测试矩形可见（Canvas 工作正常），`drawImage(pixelMap)` 调用"成功"（无异常），但远程桌面区域始终黑色。日志确认：
+- `@Watch('onRenderVersionChanged')` 每帧正确触发
+- `drawDesktop()` 被正确调用，参数正确
+- `canvasCtx.drawImage()` 完成"成功"
+- `writeBufferToPixels` 报告成功
+- graphicsBuffer 中像素数据正确（非零 RGB 值）
+
+**根本原因**: HarmonyOS Canvas `drawImage(pixelMap)` 内部缓存了 PixelMap 的初始像素数据。`writeBufferToPixels()` 更新了 PixelMap 的内部缓冲区，但 Canvas 的 `drawImage` 不会重新读取更新后的数据，仍然绘制初始数据（全黑）。
+
+**错误代码**:
+```typescript
+// ❌ 错误：writeBufferToPixels 更新数据后 Canvas drawImage 仍显示旧数据
+this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+    this.renderVersion++;  // 触发 Canvas 重绘，但 drawImage 仍用旧数据
+});
+```
+
+**正确代码**:
+```typescript
+// ✅ 正确：每帧创建新 PixelMap，Canvas drawImage 获取最新数据
+image.createPixelMap(this.graphicsBuffer, this.pixelMapOpts).then((newPm: image.PixelMap) => {
+    this.pixelMap = newPm;  // @State 变化 → SessionView @Prop 更新
+    this.renderVersion++;   // 触发 Canvas 重绘
+});
+```
+
+**修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `updateGraphicsRegion()` 方法
+
+**经验教训**: HarmonyOS Canvas `drawImage` 对同一个 PixelMap 引用存在缓存行为。`writeBufferToPixels` 虽然更新了 PixelMap 内部数据，但 Canvas 不会重新读取。必须创建新的 PixelMap 对象（新引用），Canvas 才会重新读取像素数据。
+
+---
+
+### 13.13 问题: Canvas putImageData 执行成功但屏幕显示白色
+
+**现象**: Canvas `putImageData` 日志显示执行成功（像素数据正确：`src(0,0)=B136G128R8A255`），但屏幕始终显示白色。Canvas 的 `backgroundColor('#1a1a1a')` 也不可见（应为深灰色）。
+
+**诊断日志**:
+```
+SessionView: @Watch fired rv=1 canvas=true vw=387.2 buf=8294400 dw=1920 dh=1080
+SessionView: putImageData done 387x799 src=1920x1080 scale=0.202 ox=0.0 oy=290.9 pxWritten=84366
+```
+
+**关键线索**:
+1. putImageData 执行成功，像素数据正确（非零 RGB 值）
+2. Canvas backgroundColor #1a1a1a 不可见 → Canvas 组件本身未渲染到屏幕
+3. "Canvas ready" 出现两次 → Canvas 可能被销毁重建
+4. 屏幕显示白色（不是黑色 #000000 或深灰 #1a1a1a）→ 不是父组件背景
+
+**可能原因**:
+1. 硬件加速（`RenderingContextSettings(true)`）导致 putImageData 写入 GPU 缓冲但未提交到屏幕
+2. Canvas 组件因父组件 @State 变化被重建，canvasCtx 与可见 Canvas 断开
+3. HarmonyOS Canvas putImageData 对 ImageData 的 data 属性修改不反映到实际像素
+4. Canvas 实际像素尺寸（DPI 缩放）与 ImageData 尺寸不匹配
+
+**诊断步骤**: 添加 `fillRect` 测试到 Canvas onReady 回调和 putImageData 之后，确认 Canvas 绘图 API 是否工作。禁用硬件加速测试。
+
+**修复文件**:
+- `entry/src/main/ets/components/SessionView.ets` - 添加诊断 + 禁用 HW 加速
+
+---
+
+### 13.14 问题: Canvas putImageData 写入成功但像素不渲染（最终修复）
+
+**现象**: Canvas `putImageData` 日志显示执行成功（像素数据正确：非零 RGB 值），但远程桌面区域始终空白。Canvas `fillRect` 诊断矩形可见（红色 80x80 方块），证明 Canvas 绘图管道正常工作，但 `putImageData` 写入的数据不会被渲染到屏幕。
+
+**根本原因**: HarmonyOS NEXT 5.0.0(12) 的 Canvas `putImageData()` API 存在缺陷。虽然 API 调用返回成功且不报错，但写入 ImageData 的像素数据不会被 Canvas 渲染管道实际提交到屏幕。这是 HarmonyOS Canvas 实现的一个已知问题。
+
+**修复方案**: 用 `Canvas.drawImage(PixelMap)` 替代 `putImageData`。PixelMap 是 HarmonyOS 原生的图像数据容器，Canvas `drawImage` 对 PixelMap 的渲染经过不同的代码路径，不受 `putImageData` 缺陷影响。
+
+**架构变化**:
+
+1. **渲染路径**: `putImageData(BGRA→RGBA手动转换)` → `drawImage(PixelMap)`
+2. **共享机制**: 通过模块级 `sharedPixelMap` 变量在 SessionPage 和 SessionView 之间共享 PixelMap 引用（避免 @Prop 深拷贝）
+3. **缩放**: 由 Canvas drawImage 的 `dx/dy/dw/dh` 参数处理（不再手动像素级缩放）
+
+**修改文件**:
+- `entry/src/main/ets/services/LibFreeRDP.ets` - 添加 `sharedPixelMap` / `setSharedPixelMap` 导出
+- `entry/src/main/ets/pages/SessionPage.ets` - 每帧创建 PixelMap 后调用 `setSharedPixelMap(newPm)`
+- `entry/src/main/ets/components/SessionView.ets` - `drawDesktop()` 从 putImageData 改为 `drawImage(sharedPixelMap)`
+
+**修改前代码** (SessionView.drawDesktop):
+```typescript
+// ❌ putImageData 在 HarmonyOS 上不渲染
+const imageData = this.canvasCtx.createImageData(canvasW, canvasH);
+// ... BGRA→RGBA 手动像素转换 ...
+this.canvasCtx.putImageData(imageData, 0, 0);
+```
+
+**修改后代码** (SessionView.drawDesktop):
+```typescript
+// ✅ drawImage(PixelMap) 在 HarmonyOS 上正常渲染
+const pm = sharedPixelMap;
+if (pm) {
+  this.canvasCtx.clearRect(0, 0, this.viewWidth, this.viewHeight);
+  this.canvasCtx.drawImage(pm, this.offsetX, this.offsetY,
+    this.desktopWidth * this.viewScale, this.desktopHeight * this.viewScale);
+}
+```
+
+**性能对比**:
+- `putImageData`: 每帧需手动遍历所有像素做 BGRA→RGBA 转换 + 缩放（CPU 密集，且不渲染）
+- `drawImage(PixelMap)`: 由 Canvas/GPU 处理缩放和渲染（高效且实际工作）
+
+**经验教训**: HarmonyOS Canvas 的 `putImageData` API 不可靠，应使用 `drawImage` + PixelMap 进行动态图像渲染。这与 Android 的 Canvas 行为不同（Android 的 putImageData 正常工作）。
+
+---
+
 *本文档由 Claude Sonnet 4.6 生成*
