@@ -143,6 +143,7 @@ struct SessionPage {
   // Graphics buffer (full-screen BGRA_8888 ArrayBuffer)
   private graphicsBuffer: ArrayBuffer | null = null;
   private isUpdatingPixelMap: boolean = false;
+  private firstFrameLogged: boolean = false;
   
   // UI state
   @State showToolbar: boolean = true;
@@ -318,10 +319,19 @@ struct SessionPage {
   /**
    * Handle connection success
    */
-  private async onConnectionSuccess(instance: number): Promise<void> {    this.connectionState = ConnectionState.CONNECTED;
+  private async onConnectionSuccess(instance: number): Promise<void> {
+    this.connectionState = ConnectionState.CONNECTED;
     this.statusMessage = '已连接';
-    
+
     if (this.session) {
+      // 关键修复：每次连接（包括重连）都更新 session 中的 instance 指针
+      // 重连时 NetworkManager 会创建新的 instance，必须同步给 session
+      const oldInst = this.session.getInstance();
+      if (oldInst !== instance) {
+        console.info(`${TAG}: onConnectionSuccess: instance updated ${oldInst} -> ${instance}`);
+        this.session.setInstance(instance);
+        GlobalSessionManager.registerSession(instance, this.session);
+      }
       this.session.setConnectionState(ConnectionState.CONNECTED);
     }
     
@@ -373,6 +383,11 @@ struct SessionPage {
     const inst = this.session.getInstance();
     const success = LibFreeRDP.updateGraphics(inst, this.graphicsBuffer, x, y, width, height);
     if (success) {
+      // 首帧记录日志
+      if (!this.firstFrameLogged) {
+        this.firstFrameLogged = true;
+        console.info(`${TAG}: First frame received! inst=${inst} region=(${x},${y},${width},${height})`);
+      }
       this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
         this.isUpdatingPixelMap = false;
       }).catch((e: Error) => {
@@ -380,6 +395,9 @@ struct SessionPage {
         this.isUpdatingPixelMap = false;
       });
     } else {
+      if (!this.firstFrameLogged) {
+        console.warn(`${TAG}: updateGraphics FAILED inst=${inst}`);
+      }
       this.isUpdatingPixelMap = false;
     }
   }

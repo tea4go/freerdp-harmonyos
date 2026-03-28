@@ -188,6 +188,7 @@ let eventListener: EventListener | null = null;
 
 // Global UI event listener
 let uiEventListener: UIEventListener | null = null;
+let graphicsUpdateLogged: boolean = false;
 
 // H.264 support flag
 let hasH264Support: boolean = false;
@@ -240,6 +241,10 @@ function initCallbacks(nativeModule: FreerdpNative): void {
   });
 
   nativeModule.setOnGraphicsUpdate((instance: number, x: number, y: number, width: number, height: number) => {
+    if (!graphicsUpdateLogged) {
+      graphicsUpdateLogged = true;
+      console.info(`[LibFreeRDP] OnGraphicsUpdate first call: inst=${instance} (${x},${y},${width}x${height})`);
+    }
     if (uiEventListener) {
       uiEventListener.OnGraphicsUpdate(x, y, width, height);
     }

@@ -352,6 +352,7 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复重连后 instance 不更新导致图形无法显示：onConnectionSuccess 更新 session instance |
 | 2026-03-28 | 完整修复图形渲染管道：恢复所有被注释的回调，修复 N-API 导出，实现 SessionPage 图形处理 |
 | 2026-03-28 | 修复图像缓冲区复制：native 层 updateGraphics 只复制局部区域到 (0,0)，改为复制全屏 |
 | 2026-03-28 | 修复 PixelMap 重入问题：添加防重入标志和异步写入处理 |
@@ -541,3 +542,50 @@ return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
 - 注册 `UIEventListener`，实现 `OnSettingsChanged`（创建 buffer 和 PixelMap）
 - 实现 `OnGraphicsUpdate`（调用 `updateGraphics()` + `writeBufferToPixels()`）
 - 实现 `OnGraphicsResize`（重建 buffer 和 PixelMap）
+
+---
+
+### 13.5 问题: 重连后画面仍然黑屏（session instance 未同步）
+
+**现象**: 第一次连接后偶尔断开重连，之后画面一直黑屏，日志中看不到 `OnGraphicsUpdate` 相关输出
+
+**根本原因**: `NetworkManager.doReconnect()` 创建新的 FreeRDP instance（新的 C++ 指针），但 `SessionPage` 中 `this.session.getInstance()` 仍然返回初始连接时的旧 instance 值。
+
+当 `updateGraphicsRegion` 使用旧 instance 调用 `freerdp_harmonyos_update_graphics` 时：
+1. 旧 C++ instance 已断开连接，其 GDI buffer 已释放
+2. `freerdp_harmonyos_update_graphics` 检测到 `!gdi->primary_buffer` 返回 `false`
+3. `writeBufferToPixels` 永远不会被调用
+4. 屏幕保持黑屏
+
+**错误代码**（`SessionPage.ets::onConnectionSuccess`）:
+```typescript
+// ❌ 错误：从不更新 session 的 instance，重连后 instance 已是旧值
+private async onConnectionSuccess(instance: number): Promise<void> {
+    this.connectionState = ConnectionState.CONNECTED;
+    if (this.session) {
+        this.session.setConnectionState(ConnectionState.CONNECTED);
+    }
+    // ...
+}
+```
+
+**正确代码**:
+```typescript
+// ✅ 正确：每次连接成功都更新 session 中的 instance 指针
+private async onConnectionSuccess(instance: number): Promise<void> {
+    this.connectionState = ConnectionState.CONNECTED;
+    if (this.session) {
+        const oldInst = this.session.getInstance();
+        if (oldInst !== instance) {
+            this.session.setInstance(instance);        // 同步新 instance
+            GlobalSessionManager.registerSession(instance, this.session);
+        }
+        this.session.setConnectionState(ConnectionState.CONNECTED);
+    }
+    // ...
+}
+```
+
+**修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `onConnectionSuccess()` 方法
+
+**经验教训**: 重连时必须确保所有持有 instance 引用的对象都同步更新到新的 instance 值。`NetworkManager` 内部维护自己的 `currentSession.instance`，但 `SessionPage.session` 是独立的对象，需要在每次连接成功时显式同步。
