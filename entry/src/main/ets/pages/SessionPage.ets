@@ -924,6 +924,14 @@ struct SessionPage {
               for (let i = 0; i < newChars.length; i++) {
                 const char = newChars[i];
                 const charCode = char.charCodeAt(0);
+
+                // Skip control characters (handled by onKeyEvent)
+                // \n=10, \r=13, \t=9, etc.
+                if (charCode < 32) {
+                  console.info(`${TAG}: Skipping control char: ${charCode}`);
+                  continue;
+                }
+
                 console.info(`${TAG}: Sending Unicode char: ${char} (${charCode})`);
 
                 // Send key down
@@ -949,7 +957,8 @@ struct SessionPage {
             // Record key press time to prevent onClick from triggering
             this.lastKeyPressTime = Date.now();
 
-            console.info(`${TAG}: ⌨️ TextInput onKeyEvent: type=${event.type}, keyCode=${event.keyCode}, keyText="${event.keyText}"`);
+            const keyText = event.keyText || '';
+            console.info(`${TAG}: TextInput onKeyEvent: type=${event.type}, keyCode=${event.keyCode}, keyText="${keyText}"`);
 
             // Handle all keys in Down event
             if (event.type === KeyType.Down) {
@@ -961,106 +970,103 @@ struct SessionPage {
               // Save instance reference for setTimeout callbacks
               const instance = this.session.getInstance();
 
-              // Enter key
-              if (keyCode === 2054) {  // KeyCode.KEYCODE_ENTER
-                console.info(`${TAG}: ✅ Enter key pressed`);
-                const VK_RETURN = 0x0D;
-                LibFreeRDP.sendKeyEvent(instance, VK_RETURN, true);
+              // Helper: send key down + delayed key up
+              const sendKey = (vk: number): void => {
+                LibFreeRDP.sendKeyEvent(instance, vk, true);
                 setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_RETURN, false);
+                  LibFreeRDP.sendKeyEvent(instance, vk, false);
                 }, 10);
+              };
+
+              // Helper: send unicode key down + delayed key up
+              const sendUnicodeKey = (charCode: number): void => {
+                LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, true);
+                setTimeout(() => {
+                  LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
+                }, 10);
+              };
+
+              // Enter key - match by keyCode or keyText
+              if (keyCode === 2054 || keyCode === 66 || keyText === 'Enter' || keyText === '\n') {
+                console.info(`${TAG}: Enter key pressed (keyCode=${keyCode})`);
+                sendKey(0x0D);
+                event.stopPropagation();
                 return;
               }
 
               // Space key (handle in onKeyEvent to prevent toolbar toggle)
-              if (keyCode === 2044) {  // KeyCode.KEYCODE_SPACE
-                console.info(`${TAG}: ✅ Space key pressed`);
-                const spaceCharCode = 32;
-                LibFreeRDP.sendUnicodeKeyEvent(instance, spaceCharCode, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendUnicodeKeyEvent(instance, spaceCharCode, false);
-                }, 10);
+              if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
+                console.info(`${TAG}: Space key pressed (keyCode=${keyCode})`);
+                sendUnicodeKey(32);
+                event.stopPropagation();
                 return;
               }
 
               // Backspace key
-              if (keyCode === 2055) {  // KeyCode.KEYCODE_DEL / KEYCODE_BACK
-                console.info(`${TAG}: ✅ Backspace key pressed`);
-                const VK_BACK = 0x08;
-                LibFreeRDP.sendKeyEvent(instance, VK_BACK, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_BACK, false);
-                }, 10);
+              if (keyCode === 2055 || keyCode === 67 || keyText === 'Backspace') {
+                console.info(`${TAG}: Backspace key pressed (keyCode=${keyCode})`);
+                sendKey(0x08);
                 // Clear one character from input
                 if (this.keyboardInputText.length > 0) {
                   this.keyboardInputText = this.keyboardInputText.substring(0, this.keyboardInputText.length - 1);
                   this.lastInputLength = this.keyboardInputText.length;
                 }
+                event.stopPropagation();
                 return;
               }
 
-              // Delete key - try multiple possible keyCodes
-              if (keyCode === 2056 || keyCode === 112 || keyCode === 2061) {
-                console.info(`${TAG}: ✅ Delete key pressed (keyCode=${keyCode})`);
-                const VK_DELETE = 0x2E;
-                LibFreeRDP.sendKeyEvent(instance, VK_DELETE, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_DELETE, false);
-                }, 10);
+              // Delete key - match by keyCode or keyText
+              if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
+                console.info(`${TAG}: Delete key pressed (keyCode=${keyCode})`);
+                sendKey(0x2E);
+                event.stopPropagation();
                 return;
               }
 
-              // Arrow keys - try multiple possible keyCodes
-              if (keyCode === 2012 || keyCode === 19 || keyCode === 2051) {  // Up
-                console.info(`${TAG}: ✅ Up arrow key pressed (keyCode=${keyCode})`);
-                const VK_UP = 0x26;
-                LibFreeRDP.sendKeyEvent(instance, VK_UP, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_UP, false);
-                }, 10);
+              // Arrow keys - match by keyCode or keyText
+              if (keyCode === 2012 || keyCode === 19 || keyCode === 2051 || keyText === 'ArrowUp' || keyText === 'Up') {
+                console.info(`${TAG}: Up arrow key pressed (keyCode=${keyCode})`);
+                sendKey(0x26);
+                event.stopPropagation();
                 return;
               }
-              if (keyCode === 2013 || keyCode === 20 || keyCode === 2052) {  // Down
-                console.info(`${TAG}: ✅ Down arrow key pressed (keyCode=${keyCode})`);
-                const VK_DOWN = 0x28;
-                LibFreeRDP.sendKeyEvent(instance, VK_DOWN, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_DOWN, false);
-                }, 10);
+              if (keyCode === 2013 || keyCode === 20 || keyCode === 2052 || keyText === 'ArrowDown' || keyText === 'Down') {
+                console.info(`${TAG}: Down arrow key pressed (keyCode=${keyCode})`);
+                sendKey(0x28);
+                event.stopPropagation();
                 return;
               }
-              if (keyCode === 2014 || keyCode === 21 || keyCode === 2050) {  // Left
-                console.info(`${TAG}: ✅ Left arrow key pressed (keyCode=${keyCode})`);
-                const VK_LEFT = 0x25;
-                LibFreeRDP.sendKeyEvent(instance, VK_LEFT, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_LEFT, false);
-                }, 10);
+              if (keyCode === 2014 || keyCode === 21 || keyCode === 2050 || keyText === 'ArrowLeft' || keyText === 'Left') {
+                console.info(`${TAG}: Left arrow key pressed (keyCode=${keyCode})`);
+                sendKey(0x25);
+                event.stopPropagation();
                 return;
               }
-              if (keyCode === 2015 || keyCode === 22 || keyCode === 2053) {  // Right
-                console.info(`${TAG}: ✅ Right arrow key pressed (keyCode=${keyCode})`);
-                const VK_RIGHT = 0x27;
-                LibFreeRDP.sendKeyEvent(instance, VK_RIGHT, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_RIGHT, false);
-                }, 10);
+              if (keyCode === 2015 || keyCode === 22 || keyCode === 2053 || keyText === 'ArrowRight' || keyText === 'Right') {
+                console.info(`${TAG}: Right arrow key pressed (keyCode=${keyCode})`);
+                sendKey(0x27);
+                event.stopPropagation();
                 return;
               }
 
               // Tab key
-              if (keyCode === 2049) {  // KeyCode.KEYCODE_TAB
-                console.info(`${TAG}: ✅ Tab key pressed`);
-                const VK_TAB = 0x09;
-                LibFreeRDP.sendKeyEvent(instance, VK_TAB, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_TAB, false);
-                }, 10);
+              if (keyCode === 2049 || keyCode === 61 || keyText === 'Tab') {
+                console.info(`${TAG}: Tab key pressed (keyCode=${keyCode})`);
+                sendKey(0x09);
+                event.stopPropagation();
+                return;
+              }
+
+              // Escape key
+              if (keyCode === 111 || keyCode === 2070 || keyText === 'Escape' || keyText === 'Esc') {
+                console.info(`${TAG}: Escape key pressed (keyCode=${keyCode})`);
+                sendKey(0x1B);
+                event.stopPropagation();
                 return;
               }
 
               // Log unhandled keys to help debug
-              console.warn(`${TAG}: ⚠️ Unhandled key: keyCode=${keyCode}, keyText="${event.keyText}"`);
+              console.warn(`${TAG}: Unhandled key: keyCode=${keyCode}, keyText="${keyText}"`);
             }
           })
           .onFocus(() => {
