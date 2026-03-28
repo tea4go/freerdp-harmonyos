@@ -13,7 +13,7 @@ import common from '@ohos.app.ability.common';
 import image from '@ohos.multimedia.image';
 import { BookmarkBase } from '../model/BookmarkBase';
 import { SessionState, ConnectionState, GlobalSessionManager } from '../model/SessionState';
-import LibFreeRDP, { EventListener, BookmarkSettings, ScreenSettings, AdvancedSettings, PerformanceFlags, DebugSettings, GatewaySettings } from '../services/LibFreeRDP';
+import LibFreeRDP, { EventListener, UIEventListener, BookmarkSettings, ScreenSettings, AdvancedSettings, PerformanceFlags, DebugSettings, GatewaySettings } from '../services/LibFreeRDP';
 import { RdpBackgroundService } from '../services/RdpBackgroundService';
 import { NetworkManager, SessionInfo } from '../services/NetworkManager';
 import { SessionView } from '../components/SessionView';
@@ -35,6 +35,12 @@ let globalOnConnectionSuccessCallback: ((instance: number) => void) | null = nul
 let globalOnConnectionFailureCallback: ((instance: number) => void) | null = null;
 let globalOnDisconnectingCallback: ((instance: number) => void) | null = null;
 let globalOnDisconnectedCallback: ((instance: number) => void) | null = null;
+
+// Global callbacks for UI events
+let globalOnSettingsChangedCallback: ((width: number, height: number, bpp: number) => void) | null = null;
+let globalOnGraphicsUpdateCallback: ((x: number, y: number, width: number, height: number) => void) | null = null;
+let globalOnGraphicsResizeCallback: ((width: number, height: number, bpp: number) => void) | null = null;
+let globalOnCursorTypeChangedCallback: ((cursorType: number) => void) | null = null;
 
 /**
  * Session event listener implementation class
@@ -71,6 +77,50 @@ class SessionEventListenerImpl implements EventListener {
   }
 }
 
+/**
+ * Session UI event listener implementation class
+ */
+class SessionUIEventListenerImpl implements UIEventListener {
+  OnSettingsChanged(width: number, height: number, bpp: number): void {
+    if (globalOnSettingsChangedCallback) {
+      globalOnSettingsChangedCallback(width, height, bpp);
+    }
+  }
+  OnAuthenticate(username: string, domain: string, password: string): boolean {
+    return false;
+  }
+  OnGatewayAuthenticate(username: string, domain: string, password: string): boolean {
+    return false;
+  }
+  OnVerifyCertificateEx(host: string, port: number, commonName: string, subject: string,
+                        issuer: string, fingerprint: string, flags: number): number {
+    return 1; // auto-accept
+  }
+  OnVerifyChangedCertificateEx(host: string, port: number, commonName: string, subject: string,
+                               issuer: string, fingerprint: string, oldSubject: string,
+                               oldIssuer: string, oldFingerprint: string, flags: number): number {
+    return 1; // auto-accept
+  }
+  OnGraphicsUpdate(x: number, y: number, width: number, height: number): void {
+    if (globalOnGraphicsUpdateCallback) {
+      globalOnGraphicsUpdateCallback(x, y, width, height);
+    }
+  }
+  OnGraphicsResize(width: number, height: number, bpp: number): void {
+    if (globalOnGraphicsResizeCallback) {
+      globalOnGraphicsResizeCallback(width, height, bpp);
+    }
+  }
+  OnRemoteClipboardChanged(data: string): void {
+    // TODO: handle clipboard
+  }
+  OnCursorTypeChanged(cursorType: number): void {
+    if (globalOnCursorTypeChangedCallback) {
+      globalOnCursorTypeChangedCallback(cursorType);
+    }
+  }
+}
+
 // Heartbeat interval for keeping connection alive
 const HEARTBEAT_INTERVAL_MS = 30000;
 
@@ -89,6 +139,10 @@ struct SessionPage {
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
+
+  // Graphics buffer (full-screen BGRA_8888 ArrayBuffer)
+  private graphicsBuffer: ArrayBuffer | null = null;
+  private isUpdatingPixelMap: boolean = false;
   
   // UI state
   @State showToolbar: boolean = true;
@@ -238,6 +292,22 @@ struct SessionPage {
     };
     NetworkManager.setSessionInfo(sessionInfo);
     
+    // Set up UI event listener callbacks
+    globalOnSettingsChangedCallback = (width: number, height: number, bpp: number): void => {
+      this.onSettingsChanged(width, height, bpp);
+    };
+    globalOnGraphicsUpdateCallback = (x: number, y: number, w: number, h: number): void => {
+      this.updateGraphicsRegion(x, y, w, h);
+    };
+    globalOnGraphicsResizeCallback = (width: number, height: number, bpp: number): void => {
+      this.onGraphicsResize(width, height, bpp);
+    };
+    globalOnCursorTypeChangedCallback = (cursorType: number): void => {
+      this.cursorType = cursorType;
+    };
+    const uiListener = new SessionUIEventListenerImpl();
+    LibFreeRDP.setUIEventListener(uiListener);
+
     // Connect
     if (!LibFreeRDP.connect(instance)) {
       this.statusMessage = '错误：连接失败';
@@ -248,8 +318,7 @@ struct SessionPage {
   /**
    * Handle connection success
    */
-  private async onConnectionSuccess(instance: number): Promise<void> {
-    this.connectionState = ConnectionState.CONNECTED;
+  private async onConnectionSuccess(instance: number): Promise<void> {    this.connectionState = ConnectionState.CONNECTED;
     this.statusMessage = '已连接';
     
     if (this.session) {
@@ -267,6 +336,63 @@ struct SessionPage {
     this.scheduleToolbarHide();
     
     promptAction.showToast({ message: '连接成功' });
+  }
+
+  /**
+   * Handle settings changed (desktop size/bpp from server)
+   */
+  private async onSettingsChanged(width: number, height: number, bpp: number): Promise<void> {
+    console.info(`${TAG}: onSettingsChanged ${width}x${height}@${bpp}`);
+    this.desktopWidth = width;
+    this.desktopHeight = height;
+    this.graphicsBuffer = new ArrayBuffer(width * height * 4);
+    const opts: image.InitializationOptions = {
+      size: { width: width, height: height },
+      pixelFormat: image.PixelMapFormat.BGRA_8888,
+      editable: true
+    };
+    try {
+      this.pixelMap = await image.createPixelMap(this.graphicsBuffer, opts);
+      console.info(`${TAG}: PixelMap created ${width}x${height}`);
+    } catch (e) {
+      console.error(`${TAG}: Failed to create PixelMap: ${e}`);
+    }
+  }
+
+  /**
+   * Copy native frame buffer to PixelMap and trigger UI refresh
+   */
+  private updateGraphicsRegion(x: number, y: number, width: number, height: number): void {
+    if (!this.pixelMap || !this.graphicsBuffer || this.isUpdatingPixelMap) {
+      return;
+    }
+    if (!this.session || this.session.getInstance() === 0) {
+      return;
+    }
+    this.isUpdatingPixelMap = true;
+    const inst = this.session.getInstance();
+    const success = LibFreeRDP.updateGraphics(inst, this.graphicsBuffer, x, y, width, height);
+    if (success) {
+      this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+        this.isUpdatingPixelMap = false;
+      }).catch((e: Error) => {
+        console.error(`${TAG}: writeBufferToPixels failed: ${e}`);
+        this.isUpdatingPixelMap = false;
+      });
+    } else {
+      this.isUpdatingPixelMap = false;
+    }
+  }
+
+  /**
+   * Handle graphics resize (desktop resolution changed)
+   */
+  private async onGraphicsResize(width: number, height: number, bpp: number): Promise<void> {
+    console.info(`${TAG}: onGraphicsResize ${width}x${height}@${bpp}`);
+    if (this.desktopWidth === width && this.desktopHeight === height) {
+      return;
+    }
+    await this.onSettingsChanged(width, height, bpp);
   }
 
   /**

@@ -352,6 +352,7 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 完整修复图形渲染管道：恢复所有被注释的回调，修复 N-API 导出，实现 SessionPage 图形处理 |
 | 2026-03-28 | 修复图像缓冲区复制：native 层 updateGraphics 只复制局部区域到 (0,0)，改为复制全屏 |
 | 2026-03-28 | 修复 PixelMap 重入问题：添加防重入标志和异步写入处理 |
 | 2026-03-28 | 修复 PixelMap 重复创建：OnGraphicsResize 不再重复创建相同尺寸的 PixelMap |
@@ -465,3 +466,78 @@ return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
 ---
 
 *本文档由 Claude Opus 4.5 生成*
+
+---
+
+### 13.4 问题: 程序一直停在"正在连接"界面（图形管道全面缺失）
+
+**现象**: 程序运行后自动连接，转圈动画不停，永远不显示远程桌面内容
+
+**根本原因**: 7个层面的问题同时存在，导致整个图形渲染管道断裂：
+
+| # | 文件 | 问题 |
+|---|------|------|
+| 1 | `harmonyos_freerdp.cpp` `harmonyos_post_connect()` | `g_onSettingsChanged` 和 `g_onConnectionSuccess` 被注释跳过，UI 永远不知道连接成功 |
+| 2 | `harmonyos_freerdp.cpp` `harmonyos_end_paint()` | `g_onGraphicsUpdate` 被注释跳过，图形帧永远不推送 |
+| 3 | `harmonyos_freerdp.cpp` `harmonyos_desktop_resize()` | 仍使用 `freerdp_settings_get_uint32()` 有 SIGABRT 风险 |
+| 4 | `harmonyos_freerdp.cpp` `freerdp_harmonyos_update_graphics()` | 像素格式错误（RGBX32 应为 BGRA32）、stride 错误（width*4 应为 gdi->width*4） |
+| 5 | `harmonyos_napi.cpp` | 缺少 `freerdpUpdateGraphics` N-API 导出，ArkTS 无法获取像素数据 |
+| 6 | `LibFreeRDP.ets` | 缺少图形回调注册（setOnSettingsChanged/setOnGraphicsUpdate 等） |
+| 7 | `SessionPage.ets` | 完全没有图形处理逻辑（无 buffer、无 PixelMap 创建/更新） |
+
+**修复方案**:
+
+**修复1** - `harmonyos_post_connect()` 恢复回调（用直接成员访问避免 SIGABRT）:
+```cpp
+// 在设置 update callbacks 之后添加：
+UINT32 width = settings->DesktopWidth;
+UINT32 height = settings->DesktopHeight;
+UINT32 bpp = settings->ColorDepth;
+LOGI("harmonyos_post_connect: Desktop size: %dx%d bpp=%d", (int)width, (int)height, (int)bpp);
+if (g_onSettingsChanged) {
+    g_onSettingsChanged((int64_t)(uintptr_t)instance, (int)width, (int)height, (int)bpp);
+}
+if (g_onConnectionSuccess) {
+    g_onConnectionSuccess((int64_t)(uintptr_t)instance);
+}
+```
+
+**修复2** - `harmonyos_end_paint()` 恢复图形更新回调:
+```cpp
+if (g_onGraphicsUpdate) {
+    g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
+}
+```
+
+**修复3** - `harmonyos_desktop_resize()` 改为直接成员访问:
+```cpp
+rdpSettings* settings = context->settings;
+if (g_onGraphicsResize) {
+    g_onGraphicsResize((int64_t)(uintptr_t)context->instance,
+        (int)settings->DesktopWidth,
+        (int)settings->DesktopHeight,
+        (int)settings->ColorDepth);
+}
+```
+
+**修复4** - `freerdp_harmonyos_update_graphics()` 修复像素复制:
+```cpp
+UINT32 DstFormat = PIXEL_FORMAT_BGRA32;
+return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+                          gdi->width, gdi->height,
+                          gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
+                          &gdi->palette, FREERDP_FLIP_NONE);
+```
+
+**修复5** - `harmonyos_napi.cpp` 添加 `freerdpUpdateGraphics` N-API 函数并注册到 Init()
+
+**修复6** - `LibFreeRDP.ets` 添加图形回调接口和注册：
+- `FreerdpNative` 接口新增 `setOnSettingsChanged`, `setOnGraphicsUpdate`, `setOnGraphicsResize`, `freerdpUpdateGraphics`
+- `initCallbacks()` 中注册上述回调
+- `LibFreeRDP` 类新增 `setUIEventListener()` 和 `updateGraphics()` 方法
+
+**修复7** - `SessionPage.ets` 完整实现图形处理:
+- 添加 `graphicsBuffer: ArrayBuffer`（全屏大小 = width * height * 4 字节）
+- 注册 `UIEventListener`，实现 `OnSettingsChanged`（创建 buffer 和 PixelMap）
+- 实现 `OnGraphicsUpdate`（调用 `updateGraphics()` + `writeBufferToPixels()`）
+- 实现 `OnGraphicsResize`（重建 buffer 和 PixelMap）

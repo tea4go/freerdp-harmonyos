@@ -279,13 +279,13 @@ static BOOL harmonyos_end_paint(rdpContext* context) {
         frameCount++;
     }
     
-    /* 
-     * TODO: Re-enable g_onGraphicsUpdate once we implement Android-style
-     * graphics copy in ArkTS layer (using a dedicated N-API getter function)
+    /*
+     * Android-style end_paint: notify ArkTS of update region.
+     * ArkTS will call freerdpUpdateGraphics() to fetch pixel data.
      */
-    // if (g_onGraphicsUpdate) {
-    //     g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
-    // }
+    if (g_onGraphicsUpdate) {
+        g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
+    }
     
     LOGD("harmonyos_end_paint: Graphics update region calculated, memcpy skipped (Android-style)");
 
@@ -302,10 +302,11 @@ static BOOL harmonyos_desktop_resize(rdpContext* context) {
     }
 
     if (g_onGraphicsResize) {
+        rdpSettings* settings = context->settings;
         g_onGraphicsResize((int64_t)(uintptr_t)context->instance,
-            freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth),
-            freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight),
-            freerdp_settings_get_uint32(context->settings, FreeRDP_ColorDepth));
+            (int)settings->DesktopWidth,
+            (int)settings->DesktopHeight,
+            (int)settings->ColorDepth);
     }
     return TRUE;
 }
@@ -494,16 +495,20 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     update->DesktopResize = harmonyos_desktop_resize;
     LOGI("harmonyos_post_connect: Update callbacks set");
 
-    /* 
-     * CRITICAL: Temporarily bypass ArkTS callbacks to isolate the crash.
-     * The crash occurs immediately after "Update callbacks set" when calling
-     * either g_onSettingsChanged or g_onConnectionSuccess.
-     * 
-     * TODO: Debug TSFN implementation or callback parameters.
-     */
-    LOGI("harmonyos_post_connect: Skipping ArkTS callbacks to test connection stability");
-    
-    LOGI("harmonyos_post_connect: EXIT - connection established (UI not notified)");
+    /* Notify ArkTS: settings and connection success (direct member access avoids SIGABRT) */
+    UINT32 width = settings->DesktopWidth;
+    UINT32 height = settings->DesktopHeight;
+    UINT32 bpp = settings->ColorDepth;
+    LOGI("harmonyos_post_connect: Desktop size: %dx%d bpp=%d", (int)width, (int)height, (int)bpp);
+
+    if (g_onSettingsChanged) {
+        g_onSettingsChanged((int64_t)(uintptr_t)instance, (int)width, (int)height, (int)bpp);
+    }
+    if (g_onConnectionSuccess) {
+        g_onConnectionSuccess((int64_t)(uintptr_t)instance);
+    }
+
+    LOGI("harmonyos_post_connect: EXIT - ArkTS notified");
     return TRUE;
 }
 
@@ -1125,10 +1130,11 @@ bool freerdp_harmonyos_update_graphics(int64_t instance, uint8_t* buffer, int x,
     if (!gdi || !gdi->primary_buffer)
         return false;
 
-    // Copy from GDI buffer to output buffer
-    UINT32 DstFormat = PIXEL_FORMAT_RGBX32;
-    return freerdp_image_copy(buffer, DstFormat, width * 4, 0, 0, width, height,
-                              gdi->primary_buffer, gdi->dstFormat, gdi->stride, x, y,
+    // Copy full GDI buffer to output buffer (BGRA32 for HarmonyOS PixelMap BGRA_8888)
+    UINT32 DstFormat = PIXEL_FORMAT_BGRA32;
+    return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+                              gdi->width, gdi->height,
+                              gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
                               &gdi->palette, FREERDP_FLIP_NONE);
 }
 
@@ -1309,8 +1315,8 @@ int freerdp_harmonyos_set_client_decoding(int64_t instance, bool enable) {
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
-    rect.right = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    rect.bottom = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    rect.right = (UINT16)settings->DesktopWidth;
+    rect.bottom = (UINT16)settings->DesktopHeight;
 
     if (update->SuppressOutput) {
         if (!update->SuppressOutput(context, allowDisplayUpdates, &rect)) {
@@ -1389,9 +1395,9 @@ bool freerdp_harmonyos_enter_background_mode(int64_t instance) {
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
     rect.top = 0;
-    rect.right = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    rect.bottom = (UINT16)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-    
+    rect.right = (UINT16)settings->DesktopWidth;
+    rect.bottom = (UINT16)settings->DesktopHeight;
+
     if (update->SuppressOutput) {
         /* FALSE = suppress display updates (only audio continues) */
         if (!update->SuppressOutput(context, FALSE, &rect)) {
@@ -1429,8 +1435,8 @@ bool freerdp_harmonyos_exit_background_mode(int64_t instance) {
     freerdp_settings_set_bool(settings, FreeRDP_DeactivateClientDecoding, FALSE);
     
     /* Get full screen dimensions */
-    UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    UINT32 width = settings->DesktopWidth;
+    UINT32 height = settings->DesktopHeight;
     
     RECTANGLE_16 rect = { 0, 0, 0, 0 };
     rect.left = 0;
@@ -1613,8 +1619,8 @@ bool freerdp_harmonyos_request_refresh(int64_t instance) {
     }
     
     /* Get screen dimensions */
-    UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-    UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    UINT32 width = settings->DesktopWidth;
+    UINT32 height = settings->DesktopHeight;
     
     LOGI("Requesting full screen refresh (%ux%u)", width, height);
     

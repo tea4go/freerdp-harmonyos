@@ -665,9 +665,35 @@ static napi_value FreerdpCheckConnectionStatus(napi_env env, napi_callback_info 
     return result;
 }
 
+// freerdpUpdateGraphics(instance: number, buffer: ArrayBuffer, x: number, y: number, width: number, height: number): boolean
+static napi_value FreerdpUpdateGraphics(napi_env env, napi_callback_info info) {
+    size_t argc = 6;
+    napi_value args[6];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    int64_t instance = GetInt64(env, args[0]);
+
+    void* bufferData = nullptr;
+    size_t bufferLength = 0;
+    napi_get_arraybuffer_info(env, args[1], &bufferData, &bufferLength);
+
+    int32_t x = GetInt32(env, args[2]);
+    int32_t y = GetInt32(env, args[3]);
+    int32_t width = GetInt32(env, args[4]);
+    int32_t height = GetInt32(env, args[5]);
+
+    bool success = false;
+    if (bufferData && bufferLength > 0) {
+        success = freerdp_harmonyos_update_graphics(instance, (uint8_t*)bufferData, x, y, width, height);
+    }
+
+    napi_value result;
+    napi_get_boolean(env, success, &result);
+    return result;
+}
+
 // freerdpIsConnected(instance: number): boolean
-static napi_value FreerdpIsConnected(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
+static napi_value FreerdpIsConnected(napi_env env, napi_callback_info info) {    size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     
@@ -817,6 +843,7 @@ static napi_value Init(napi_env env, napi_value exports) {
         
         // Display functions
         { "freerdpSetClientDecoding", nullptr, FreerdpSetClientDecoding, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "freerdpUpdateGraphics", nullptr, FreerdpUpdateGraphics, nullptr, nullptr, nullptr, napi_default, nullptr },
         
         // Utility functions
         { "freerdpGetLastErrorString", nullptr, FreerdpGetLastErrorString, nullptr, nullptr, nullptr, napi_default, nullptr },
