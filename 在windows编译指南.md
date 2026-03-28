@@ -352,6 +352,7 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复重复连接：NetworkManager 在 setSessionInfo 后不应立即触发重连 |
 | 2026-03-28 | 修复图形渲染：PixelMap 数据更新后需要调用 writeBufferToPixels() |
 | 2026-03-28 | 修复 SIGABRT 崩溃：替换 freerdp_settings_get_uint32() 为直接成员访问 |
 | 2026-03-28 | 实现远程桌面图形渲染管道修复 |

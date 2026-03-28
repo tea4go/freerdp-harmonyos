@@ -24,6 +24,7 @@ let netConnection: connection.NetConnection | null = null;
 let reconnectAttempts: number = 0;
 let isReconnecting: boolean = false;
 let reconnectTimerId: number = -1;
+let hasInitialConnection: boolean = false;  // 标记首次连接是否成功，避免过早触发重连
 
 // Callbacks
 let onNetworkAvailableCallback: (() => void) | null = null;
@@ -77,8 +78,9 @@ export class NetworkManager {
           onNetworkAvailableCallback();
         }
 
-        // Trigger reconnect if we have a session to reconnect
-        if (currentSession && !isReconnecting) {
+        // Trigger reconnect ONLY if initial connection was successful and then lost
+        // 不要在首次连接还没成功时就触发重连
+        if (currentSession && !isReconnecting && hasInitialConnection) {
           NetworkManager.startReconnect();
         }
       });
@@ -145,10 +147,20 @@ export class NetworkManager {
   }
 
   /**
+   * Mark initial connection as successful
+   * 必须在首次连接成功后调用，否则不会触发自动重连
+   */
+  static setInitialConnectionSuccess(): void {
+    hasInitialConnection = true;
+    console.info(`${TAG}: Initial connection marked as successful, auto-reconnect enabled`);
+  }
+
+  /**
    * Clear session info
    */
   static clearSessionInfo(): void {
     currentSession = null;
+    hasInitialConnection = false;  // 重置首次连接标记
     NetworkManager.cancelReconnect();
     console.info(`${TAG}: Session info cleared`);
   }

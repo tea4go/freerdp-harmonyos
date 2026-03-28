@@ -345,11 +345,14 @@ struct SessionPage {
   private async onConnectionSuccess(instance: number): Promise<void> {
     this.connectionState = ConnectionState.CONNECTED;
     this.statusMessage = '已连接';
-    
+
     if (this.session) {
       this.session.setConnectionState(ConnectionState.CONNECTED);
     }
-    
+
+    // 标记首次连接成功，允许后续自动重连
+    NetworkManager.setInitialConnectionSuccess();
+
     // Start background service
     this.backgroundService = new RdpBackgroundService(this.context);
     await this.backgroundService.start();
