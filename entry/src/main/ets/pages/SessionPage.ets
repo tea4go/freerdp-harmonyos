@@ -1069,7 +1069,7 @@ struct SessionPage {
               return;
             }
 
-            // ---- Space - send via Unicode ----
+            // ---- Space - send via Unicode (works reliably) ----
             if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
               console.info(`${TAG}: Space key (keyCode=${keyCode})`);
               LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
@@ -1080,13 +1080,17 @@ struct SessionPage {
             }
 
             // ---- Printable characters: send via Unicode ----
+            // Use sendUnicodeKeyEvent for printable characters (a-z, 0-9, symbols).
+            // sendKeyEvent with VK codes doesn't work reliably for letter keys
+            // in the current FreeRDP build (scancode lookup returns 0).
             if (keyText.length === 1) {
               const charCode = keyText.charCodeAt(0);
               if (charCode >= 32) {
-                console.info(`${TAG}: Printable char '${keyText}' (${charCode}) via onKeyEvent`);
+                console.info(`${TAG}: Printable char '${keyText}' (${charCode}) via Unicode`);
                 LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, true);
                 LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
                 this.keyEventHandled = true;
+                event.stopPropagation();
                 return;
               }
             }
