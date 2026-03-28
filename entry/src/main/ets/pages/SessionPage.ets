@@ -807,8 +807,7 @@ struct SessionPage {
               console.info(`${TAG}: Touch DOWN screen(${touchX.toFixed(0)}, ${touchY.toFixed(0)}) -> desktop(${x}, ${y})`);
               LibFreeRDP.sendCursorEvent(this.session.getInstance(), x, y, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1);
 
-              // Focus hidden TextInput to enable keyboard input
-              this.keyboardInputController.requestFocus();
+              // Mark as focused
               this.remoteDesktopHasFocus = true;
             } else if (event.type === TouchType.Up) {
               console.info(`${TAG}: Touch UP screen(${touchX.toFixed(0)}, ${touchY.toFixed(0)}) -> desktop(${x}, ${y})`);
@@ -899,11 +898,13 @@ struct SessionPage {
 
       // Hidden TextInput for keyboard input
       if (this.connectionState === ConnectionState.CONNECTED) {
-        TextInput({ text: this.keyboardInputText, controller: this.keyboardInputController })
+        TextInput({ text: $$this.keyboardInputText, controller: this.keyboardInputController })
           .width(1)
           .height(1)
           .position({ x: -100, y: -100 })
           .opacity(0)
+          .focusable(true)
+          .defaultFocus(true)
           .onChange((value: string) => {
             if (!this.session || this.session.getInstance() === 0) {
               return;
