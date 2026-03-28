@@ -145,3 +145,12 @@ android/Studio/local.properties
 .claude/projects/*/memory/
 grep
 .claude/settings.local.json
+.hvigor/cache/file-cache.json
+.hvigor/cache/meta.json
+.hvigor/cache/task-cache.json
+.hvigor/dependencyMap/dependencyMap.json5
+.hvigor/outputs/logs/details/details.json
+.hvigor/outputs/sync/fileCache.json
+.hvigor/outputs/sync/output.json
+.hvigor/report/report-202601181724003310.json
+.hvigor/report/report-202601181732081580.json
