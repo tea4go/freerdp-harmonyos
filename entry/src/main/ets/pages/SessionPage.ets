@@ -904,9 +904,6 @@ struct SessionPage {
           .opacity(0)
           .focusable(true)
           .defaultFocus(true)
-          .type(InputType.Normal)
-          .enterKeyType(EnterKeyType.Send)
-          .enableKeyboardOnFocus(false)
           .onChange((value: string) => {
             if (!this.session || this.session.getInstance() === 0) {
               return;
