@@ -1121,13 +1121,19 @@ struct SessionPage {
     .defaultFocus(true)
     .tabIndex(0)
     .onKeyEvent((event: KeyEvent) => {
-      // PRIMARY keyboard handler on Stack - catches ALL keys including Backspace
-      // This is more reliable than TextInput's onKeyEvent which may consume keys internally
+      // PRIMARY keyboard handler on Stack - handles ALL keys
+      // Uses Windows VK codes + sendKeyEvent for reliable key delivery
       if (!this.session || this.session.getInstance() === 0 || this.connectionState !== ConnectionState.CONNECTED) {
         return;
       }
 
-      // Only process Down events
+      // Log ALL key events for debugging (both Down and Up)
+      const dbgKeyCode = event.keyCode;
+      const dbgKeyText = event.keyText || '';
+      const dbgType = event.type === KeyType.Down ? 'DOWN' : 'UP';
+      console.info(`${TAG}: KEY [${dbgType}] code=${dbgKeyCode} text="${dbgKeyText}"`);
+
+      // Only process Down events (send immediate down+up pair)
       if (event.type !== KeyType.Down) {
         return;
       }
@@ -1142,23 +1148,37 @@ struct SessionPage {
       const keyCode = event.keyCode;
       const keyText = event.keyText || '';
 
-      // KBDEXT flag for extended keys
+      // KBDEXT flag for extended keys (arrows, delete, navigation)
       const KBDEXT = 0x100;
+
+      // Helper: send immediate key down + up pair
       const sendKeyImmediate = (vk: number): void => {
-        LibFreeRDP.sendKeyEvent(instance, vk, true);
-        LibFreeRDP.sendKeyEvent(instance, vk, false);
+        const downResult = LibFreeRDP.sendKeyEvent(instance, vk, true);
+        const upResult = LibFreeRDP.sendKeyEvent(instance, vk, false);
+        console.info(`${TAG}: sendKeyEvent(0x${vk.toString(16)}) down=${downResult} up=${upResult}`);
       };
 
-      console.info(`${TAG}: Stack onKeyEvent PRIMARY: keyCode=${keyCode}, keyText="${keyText}"`);
+      // Helper: send Unicode key down + up pair
+      const sendUnicodeImmediate = (unicode: number): void => {
+        const downResult = LibFreeRDP.sendUnicodeKeyEvent(instance, unicode, true);
+        const upResult = LibFreeRDP.sendUnicodeKeyEvent(instance, unicode, false);
+        console.info(`${TAG}: sendUnicodeKeyEvent(${unicode}) down=${downResult} up=${upResult}`);
+      };
 
-      // Backspace (standard key, no KBDEXT) - HARMONYOS KEYCODE_DEL = 2055
+      // Update lastKeyPressTime to prevent onClick interference
+      this.lastKeyPressTime = Date.now();
+
+      // ---- Special keys (use sendKeyEvent with VK codes) ----
+
+      // Backspace (VK_BACK = 0x08, standard key, no KBDEXT)
+      // HarmonyOS: KEYCODE_DEL = 2055
       if (keyCode === 2055 || keyCode === 67 || keyText === 'Backspace') {
-        console.info(`${TAG}: Stack handling Backspace key`);
         sendKeyImmediate(0x08);
         event.stopPropagation();
         return;
       }
-      // Enter
+      // Enter (VK_RETURN = 0x0D, standard key)
+      // HarmonyOS: KEYCODE_ENTER = 2054
       if (keyCode === 2054 || keyCode === 66 || keyText === 'Enter' || keyText === '\n') {
         sendKeyImmediate(0x0D);
         this.keyboardInputText = '';
@@ -1166,67 +1186,99 @@ struct SessionPage {
         event.stopPropagation();
         return;
       }
-      // Delete (extended) - HARMONYOS KEYCODE_FORWARD_DEL = 2056
-      if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
-        console.info(`${TAG}: Stack handling Delete key`);
+      // Delete (VK_DELETE = 0x2E, EXTENDED key with KBDEXT)
+      // HarmonyOS: KEYCODE_FORWARD_DEL = 2056 or 2071
+      if (keyCode === 2056 || keyCode === 2071 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
         sendKeyImmediate(0x2E | KBDEXT);
         event.stopPropagation();
         return;
       }
-      // Arrow Up (extended)
+      // Arrow Up (VK_UP = 0x26, extended)
       if (keyCode === 2012 || keyCode === 19 || keyCode === 2051 || keyText === 'ArrowUp' || keyText === 'Up') {
         sendKeyImmediate(0x26 | KBDEXT);
         event.stopPropagation();
         return;
       }
-      // Arrow Down (extended)
+      // Arrow Down (VK_DOWN = 0x28, extended)
       if (keyCode === 2013 || keyCode === 20 || keyCode === 2052 || keyText === 'ArrowDown' || keyText === 'Down') {
         sendKeyImmediate(0x28 | KBDEXT);
         event.stopPropagation();
         return;
       }
-      // Arrow Left (extended)
+      // Arrow Left (VK_LEFT = 0x25, extended)
       if (keyCode === 2014 || keyCode === 21 || keyCode === 2050 || keyText === 'ArrowLeft' || keyText === 'Left') {
         sendKeyImmediate(0x25 | KBDEXT);
         event.stopPropagation();
         return;
       }
-      // Arrow Right (extended)
+      // Arrow Right (VK_RIGHT = 0x27, extended)
       if (keyCode === 2015 || keyCode === 22 || keyCode === 2053 || keyText === 'ArrowRight' || keyText === 'Right') {
         sendKeyImmediate(0x27 | KBDEXT);
         event.stopPropagation();
         return;
       }
-      // Tab (standard key)
+      // Tab (VK_TAB = 0x09, standard key)
       if (keyCode === 2049 || keyCode === 61 || keyText === 'Tab') {
         sendKeyImmediate(0x09);
         event.stopPropagation();
         return;
       }
-      // Escape (standard key)
+      // Escape (VK_ESCAPE = 0x1B, standard key)
       if (keyCode === 111 || keyCode === 2070 || keyText === 'Escape' || keyText === 'Esc') {
         sendKeyImmediate(0x1B);
         event.stopPropagation();
         return;
       }
-      // Space - send via Unicode
+
+      // ---- Space (VK_SPACE = 0x20, standard key) ----
+      // Use sendKeyEvent with VK_SPACE, NOT sendUnicodeKeyEvent
+      // HarmonyOS: KEYCODE_SPACE = 62
       if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
-        LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
-        LibFreeRDP.sendUnicodeKeyEvent(instance, 32, false);
+        sendKeyImmediate(0x20); // VK_SPACE
         event.stopPropagation();
         return;
       }
-      // Printable characters: send via Unicode
+
+      // ---- Printable characters ----
+      // Strategy: Map A-Z/a-z to Windows VK codes (0x41-0x5A) via sendKeyEvent
+      //           Map 0-9 to Windows VK codes (0x30-0x39) via sendKeyEvent
+      //           Other printable chars via sendUnicodeKeyEvent
       if (keyText.length === 1) {
         const charCode = keyText.charCodeAt(0);
+
+        // Uppercase A-Z: charCode 65-90, VK codes same (0x41-0x5A)
+        if (charCode >= 65 && charCode <= 90) {
+          console.info(`${TAG}: Letter '${keyText}' -> VK=0x${charCode.toString(16)}`);
+          sendKeyImmediate(charCode);
+          event.stopPropagation();
+          return;
+        }
+        // Lowercase a-z: charCode 97-122, map to uppercase VK (0x41-0x5A)
+        if (charCode >= 97 && charCode <= 122) {
+          const vk = charCode - 32;
+          console.info(`${TAG}: Letter '${keyText}' -> VK=0x${vk.toString(16)}`);
+          sendKeyImmediate(vk);
+          event.stopPropagation();
+          return;
+        }
+        // Digits 0-9: charCode 48-57, VK codes same (0x30-0x39)
+        if (charCode >= 48 && charCode <= 57) {
+          console.info(`${TAG}: Digit '${keyText}' -> VK=0x${charCode.toString(16)}`);
+          sendKeyImmediate(charCode);
+          event.stopPropagation();
+          return;
+        }
+        // Other printable chars (symbols, etc.) via Unicode
         if (charCode >= 32) {
-          console.info(`${TAG}: Stack sending printable char '${keyText}' (${charCode}) via Unicode`);
-          LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, true);
-          LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
+          console.info(`${TAG}: Symbol '${keyText}' (${charCode}) via Unicode`);
+          sendUnicodeImmediate(charCode);
           event.stopPropagation();
           return;
         }
       }
+
+      // Log unhandled keys
+      console.warn(`${TAG}: UNHANDLED KEY: code=${keyCode}, text="${keyText}"`);
     })
     .onClick(() => {
       // Check if this click is from keyboard (space/enter)
