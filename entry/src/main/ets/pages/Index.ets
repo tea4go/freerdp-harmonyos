@@ -28,14 +28,15 @@ struct Index {
   @State showQuickConnect: boolean = false;
   @State showNativeError: boolean = false;
   @State nativeErrorMessage: string = '';
-  
+
   private context = getContext(this) as common.UIAbilityContext;
   private preferencesHelper: preferences.Preferences | null = null;
+  private hasAutoConnected: boolean = false;
 
   aboutToAppear(): void {
     console.info(`${TAG}: aboutToAppear`);
     this.loadBookmarks();
-    
+
     // Check if native library is loaded
     if (!LibFreeRDP.isNativeLoaded()) {
       const error = LibFreeRDP.getLoadError();
@@ -46,6 +47,12 @@ struct Index {
       // Show FreeRDP version
       const version = LibFreeRDP.getVersion();
       console.info(`${TAG}: FreeRDP version: ${version}`);
+
+      // Auto-connect on first launch
+      if (!this.hasAutoConnected) {
+        this.hasAutoConnected = true;
+        this.quickConnect();
+      }
     }
   }
 
