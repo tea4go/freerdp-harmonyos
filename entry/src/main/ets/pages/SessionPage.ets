@@ -941,7 +941,16 @@ struct SessionPage {
                 LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
               }
             }
-            // Do NOT handle Backspace/deletion here - handled entirely by onKeyEvent
+            // Handle Backspace/deletion (TextInput may consume the key internally,
+            // preventing onKeyEvent from firing - detect via text length change)
+            if (value.length < this.lastInputLength) {
+              const deleteCount = this.lastInputLength - value.length;
+              console.info(`${TAG}: Text deletion detected (${deleteCount} chars), sending Backspace`);
+              for (let i = 0; i < deleteCount; i++) {
+                LibFreeRDP.sendKeyEvent(instance, 0x08, true);
+                LibFreeRDP.sendKeyEvent(instance, 0x08, false);
+              }
+            }
 
             this.lastInputLength = value.length;
           })
@@ -1134,6 +1143,12 @@ struct SessionPage {
 
       console.info(`${TAG}: Stack onKeyEvent fallback: keyCode=${keyCode}, keyText="${keyText}"`);
 
+      // Backspace (standard key)
+      if (keyCode === 2055 || keyCode === 67 || keyText === 'Backspace') {
+        sendKeyImmediate(0x08);
+        event.stopPropagation();
+        return;
+      }
       // Enter
       if (keyCode === 2054 || keyCode === 66 || keyText === 'Enter' || keyText === '\n') {
         sendKeyImmediate(0x0D);
