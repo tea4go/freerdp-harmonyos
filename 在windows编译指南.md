@@ -352,6 +352,7 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复图形渲染：PixelMap 数据更新后需要调用 writeBufferToPixels() |
 | 2026-03-28 | 修复 SIGABRT 崩溃：替换 freerdp_settings_get_uint32() 为直接成员访问 |
 | 2026-03-28 | 实现远程桌面图形渲染管道修复 |
 | 2026-03-28 | 添加自动启动连接功能 |
@@ -394,6 +395,35 @@ UINT32 bpp = settings->ColorDepth;
 - `freerdp_harmonyos_request_refresh()` - 第 1609-1610 行
 
 **经验教训**: 在 HarmonyOS/musl libc 环境下，避免使用可能触发 abort() 的 FreeRDP API 函数，改用直接成员访问更安全。
+
+### 13.2 问题: PixelMap 不更新显示
+
+**现象**: 连接成功，OnGraphicsUpdate 回调正常触发，但屏幕不显示远程桌面内容
+
+**根本原因**: HarmonyOS 的 PixelMap 在创建后，底层 ArrayBuffer 数据被更新，但 PixelMap 不会自动检测到变化。
+
+**错误代码**:
+```typescript
+// ❌ 错误：只更新 buffer，PixelMap 不知道数据变了
+const success = LibFreeRDP.updateGraphics(instance, this.graphicsBuffer, x, y, width, height);
+if (success) {
+  this.refreshTrigger++;  // 这不会触发 PixelMap 更新
+}
+```
+
+**正确代码**:
+```typescript
+// ✅ 正确：更新 buffer 后，调用 writeBufferToPixels 通知 PixelMap
+const success = LibFreeRDP.updateGraphics(instance, this.graphicsBuffer, x, y, width, height);
+if (success) {
+  this.pixelMap.writeBufferToPixels(this.graphicsBuffer);  // 通知 PixelMap 数据已更新
+  this.refreshTrigger++;
+}
+```
+
+**修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `updateGraphicsRegion()` 方法
+
+**经验教训**: HarmonyOS PixelMap 不会自动监听 ArrayBuffer 变化，需要显式调用 `writeBufferToPixels()` 来更新图像数据。
 
 ---
 

@@ -508,6 +508,8 @@ struct SessionPage {
       );
 
       if (success) {
+        // 写入缓冲区数据到 PixelMap，通知 UI 更新
+        this.pixelMap.writeBufferToPixels(this.graphicsBuffer);
         // Trigger UI refresh by incrementing the trigger counter
         this.refreshTrigger++;
       }
