@@ -469,9 +469,12 @@ struct SessionPage {
       const view = new Uint8Array(this.graphicsBuffer);
       view.fill(0);
 
-      // Create PixelMap
-      const initializationOptions: image.PixelMapInitializationOptions = {
-        size: { width: width, height: height },
+      // Create size object with explicit interface
+      const size: image.Size = { width: width, height: height };
+
+      // Create initialization options
+      const initializationOptions: image.InitializationOptions = {
+        size: size,
         pixelFormat: image.PixelMapFormat.BGRA_8888,
         editable: true
       };

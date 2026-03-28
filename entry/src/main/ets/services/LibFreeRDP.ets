@@ -9,6 +9,15 @@
 
 import freerdpNativeImport from 'libfreerdp_harmonyos.so';
 
+/**
+ * Framebuffer information interface
+ */
+export interface FramebufferInfo {
+  width: number;
+  height: number;
+  stride: number;
+}
+
 interface FreerdpNative {
   setOnConnectionSuccess(callback: (instance: number) => void): void;
   setOnConnectionFailure(callback: (instance: number) => void): void;
@@ -46,7 +55,7 @@ interface FreerdpNative {
   freerdpGetIdleTime(inst: number): number;
   freerdpCheckConnectionStatus(inst: number): number;
   freerdpUpdateGraphics(inst: number, buffer: ArrayBuffer, x: number, y: number, width: number, height: number): boolean;
-  freerdpGetFramebufferInfo(inst: number): { width: number; height: number; stride: number } | null;
+  freerdpGetFramebufferInfo(inst: number): FramebufferInfo | null;
 }
 
 let nativeLoaded = false;
@@ -939,9 +948,9 @@ export class LibFreeRDP {
   /**
    * Get framebuffer information (dimensions and stride)
    * @param inst FreeRDP instance
-   * @returns Object with width, height, stride or null if failed
+   * @returns FramebufferInfo or null if failed
    */
-  static getFramebufferInfo(inst: number): { width: number; height: number; stride: number } | null {
+  static getFramebufferInfo(inst: number): FramebufferInfo | null {
     if (!LibFreeRDP.ensureNativeReady()) {
       return null;
     }
