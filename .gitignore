@@ -1,47 +1,96 @@
-# Build outputs
+# ===========================================
+# FreeRDP HarmonyOS - Git Ignore Rules
+# ===========================================
+
+# -------------------------------------------
+# Build Outputs
+# -------------------------------------------
 build/
+out/
+dist/
+bin/
+obj/
 *.hap
 *.app
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.dylib
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.map
+*.d
+*.dwo
+*.su
+*.so.debug
+*.so.dSYM/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/CTestTestfile.cmake
+**/Testing/
+**/compile_commands.json
+**/.ninja_deps
+**/.ninja_log
+cmake-build-*/
 
-# IDE
+# -------------------------------------------
+# IDE & Editor
+# -------------------------------------------
 .idea/
 *.iml
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+*.VC.db
+*.VC.VC.opendb
+*.suo
+*.user
 
-# OS files
+# -------------------------------------------
+# Operating System Files
+# -------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Node modules
+# -------------------------------------------
+# Dependencies
+# -------------------------------------------
 node_modules/
 oh_modules/
+oh_modules.bak/
 
-# Logs
+# -------------------------------------------
+# Logs & Temporary Files
+# -------------------------------------------
 *.log
-
-# Temporary files
+*.log.*
 *.tmp
 *.temp
-
-# Native library binaries (keep arm64-v8a, ignore others)
-# entry/libs/ - now tracked
-# *.so - now tracked for arm64-v8a
-
-# Cache
 .cache/
 *.cache
+*.bak
+*.orig
+*.rej
 
+# -------------------------------------------
 # DevEco Studio
+# -------------------------------------------
 .preview/
 .cxx/
+.hvigor/
+local.properties
 
-# Android Studio (legacy)
-android/Studio/build/
-android/Studio/freeRDPCore/build/
-android/Studio/aFreeRDP/build/
-android/Studio/*.apk
-android/Studio/local.properties
-
-# Signing files (sensitive)
+# -------------------------------------------
+# Signing Files (SENSITIVE - Never commit!)
+# -------------------------------------------
 .signing/*.p12
 .signing/*.cer
 .signing/*.p7b
@@ -53,11 +102,84 @@ android/Studio/local.properties
 *.jks
 *.keystore
 
-# Keep signing directory README
+# Keep only documentation in signing directory
 !.signing/README.md
 !.signing/签名文件说明.txt
 
-# Chat logs (sensitive)
+# -------------------------------------------
+# Scripts - Temporary & Personal
+# -------------------------------------------
+# Test scripts
+test-*.ps1
+test-*.cmd
+test-*.sh
+
+# Temporary scripts
+temp-*.ps1
+temp-*.cmd
+temp-*.sh
+
+# Debug/Development scripts
+debug-*.ps1
+debug-*.cmd
+debug-*.sh
+
+# Local/Personal scripts
+local-*.ps1
+local-*.cmd
+local-*.sh
+*-local.ps1
+*-local.cmd
+*-local.sh
+
+# Experimental/Work-in-progress scripts
+experimental-*.ps1
+experimental-*.cmd
+experimental-*.sh
+wip-*.ps1
+wip-*.cmd
+wip-*.sh
+
+# Backup and old scripts
+*.backup.ps1
+*.backup.cmd
+*.backup.sh
+*.old.ps1
+*.old.cmd
+*.old.sh
+
+# Private/Sensitive scripts
+*-private.ps1
+*-private.cmd
+*-private.sh
+*.secret.ps1
+*.secret.cmd
+*.secret.sh
+
+# -------------------------------------------
+# Native Build Artifacts
+# -------------------------------------------
+native-build/
+native-install/
+native-src/
+entry/libs/*/*.so
+entry/libs/*/*.so.*
+entry/libs/*/*.a
+entry/libs/*/*.lib
+
+# -------------------------------------------
+# Legacy Android (if any)
+# -------------------------------------------
+android/Studio/build/
+android/Studio/freeRDPCore/build/
+android/Studio/aFreeRDP/build/
+android/Studio/*.apk
+android/Studio/local.properties
+
+# -------------------------------------------
+# Claude AI & Chat Logs (SENSITIVE)
+# -------------------------------------------
 聊天记录/
 .claude/settings.json
+.claude/projects/*/memory/
 .claude/settings.local.json
