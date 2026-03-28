@@ -1121,10 +1121,15 @@ bool freerdp_harmonyos_update_graphics(int64_t instance, uint8_t* buffer, int x,
     if (!gdi || !gdi->primary_buffer)
         return false;
 
-    // Copy from GDI buffer to output buffer
-    UINT32 DstFormat = PIXEL_FORMAT_RGBX32;
-    return freerdp_image_copy(buffer, DstFormat, width * 4, 0, 0, width, height,
-                              gdi->primary_buffer, gdi->dstFormat, gdi->stride, x, y,
+    /* Copy entire GDI buffer to output buffer.
+     * The ArkTS layer passes a full-screen sized buffer (gdi->width * gdi->height * 4),
+     * so we copy the entire framebuffer each time.
+     * Using BGRA format to match PixelMap's BGRA_8888 pixel format.
+     */
+    UINT32 DstFormat = PIXEL_FORMAT_BGRA32;
+    return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+                              gdi->width, gdi->height,
+                              gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
                               &gdi->palette, FREERDP_FLIP_NONE);
 }
 

@@ -161,6 +161,8 @@ struct SessionPage {
   @State cursorType: number = 1;
   @State isInBackground: boolean = false;
   @State isScreenLocked: boolean = false;
+  @State isWritingToPixelMap: boolean = false;  // 防止 writeBufferToPixels 重入
+  @State pixelMapReady: boolean = false;  // 标记 PixelMap 是否已创建好
   
   // Components
   private sessionView: SessionView | null = null;
@@ -464,6 +466,15 @@ struct SessionPage {
    */
   private async createPixelMap(width: number, height: number): Promise<void> {
     try {
+      // 如果尺寸相同且 PixelMap 已存在，不重复创建
+      if (this.pixelMapReady && this.pixelMap && this.graphicsBuffer &&
+          this.desktopWidth === width && this.desktopHeight === height) {
+        console.info(`${TAG}: PixelMap already exists for ${width}x${height}, skip recreation`);
+        return;
+      }
+
+      this.pixelMapReady = false;
+
       // Create buffer for pixel data (BGRA format, 4 bytes per pixel)
       const bufferSize = width * height * 4;
       this.graphicsBuffer = new ArrayBuffer(bufferSize);
@@ -483,6 +494,7 @@ struct SessionPage {
       };
 
       this.pixelMap = await image.createPixelMap(this.graphicsBuffer, initializationOptions);
+      this.pixelMapReady = true;
       console.info(`${TAG}: PixelMap created ${width}x${height}`);
 
       // Request initial refresh
@@ -502,8 +514,18 @@ struct SessionPage {
       return;
     }
 
+    // 防止重入：如果上一次 writeBufferToPixels 还没完成，跳过本次更新
+    if (this.isWritingToPixelMap) {
+      return;
+    }
+
+    // 等待 PixelMap 创建完成
+    if (!this.pixelMapReady) {
+      return;
+    }
+
     try {
-      // Call native function to copy graphics data to our buffer
+      // Call native function to copy entire GDI buffer to our buffer
       const success = LibFreeRDP.updateGraphics(
         this.session.getInstance(),
         this.graphicsBuffer,
@@ -511,10 +533,16 @@ struct SessionPage {
       );
 
       if (success) {
+        this.isWritingToPixelMap = true;
         // 写入缓冲区数据到 PixelMap，通知 UI 更新
-        this.pixelMap.writeBufferToPixels(this.graphicsBuffer);
-        // Trigger UI refresh by incrementing the trigger counter
-        this.refreshTrigger++;
+        this.pixelMap.writeBufferToPixels(this.graphicsBuffer).then(() => {
+          this.isWritingToPixelMap = false;
+          // Trigger UI refresh by incrementing the trigger counter
+          this.refreshTrigger++;
+        }).catch((err: Error) => {
+          this.isWritingToPixelMap = false;
+          console.error(`${TAG}: writeBufferToPixels failed:`, err);
+        });
       }
     } catch (error) {
       console.error(`${TAG}: updateGraphicsRegion failed:`, error);

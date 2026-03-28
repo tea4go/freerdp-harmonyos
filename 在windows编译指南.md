@@ -352,6 +352,9 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复图像缓冲区复制：native 层 updateGraphics 只复制局部区域到 (0,0)，改为复制全屏 |
+| 2026-03-28 | 修复 PixelMap 重入问题：添加防重入标志和异步写入处理 |
+| 2026-03-28 | 修复 PixelMap 重复创建：OnGraphicsResize 不再重复创建相同尺寸的 PixelMap |
 | 2026-03-28 | 修复重复连接：NetworkManager 在 setSessionInfo 后不应立即触发重连 |
 | 2026-03-28 | 修复图形渲染：PixelMap 数据更新后需要调用 writeBufferToPixels() |
 | 2026-03-28 | 修复 SIGABRT 崩溃：替换 freerdp_settings_get_uint32() 为直接成员访问 |
@@ -425,6 +428,39 @@ if (success) {
 **修复文件**: `entry/src/main/ets/pages/SessionPage.ets` 的 `updateGraphicsRegion()` 方法
 
 **经验教训**: HarmonyOS PixelMap 不会自动监听 ArrayBuffer 变化，需要显式调用 `writeBufferToPixels()` 来更新图像数据。
+
+### 13.3 问题: 远程桌面画面黑屏/不显示
+
+**现象**: 连接成功，OnGraphicsUpdate 回调正常触发，writeBufferToPixels 也被调用，但屏幕显示全黑
+
+**根本原因**: Native 层 `freerdp_harmonyos_update_graphics()` 中的 `freerdp_image_copy()` 参数设置错误：
+1. **目标 stride 错误**: 使用了 `width * 4`（更新区域宽度），而非 `gdi->width * 4`（全屏宽度）
+2. **目标起始位置错误**: 从 (0, 0) 开始写入，而非从 (x, y) 位置
+3. **只复制了更新区域**: ArkTS 层传入的是全屏大小的 buffer，但只复制了更新区域到 buffer 起始位置
+4. **像素格式错误**: 使用 `PIXEL_FORMAT_RGBX32` 而非 `PIXEL_FORMAT_BGRA32`（PixelMap 使用 BGRA_8888）
+
+**错误代码**:
+```cpp
+// ❌ 错误：只复制更新区域到 buffer 的 (0,0) 位置
+UINT32 DstFormat = PIXEL_FORMAT_RGBX32;
+return freerdp_image_copy(buffer, DstFormat, width * 4, 0, 0, width, height,
+                          gdi->primary_buffer, gdi->dstFormat, gdi->stride, x, y,
+                          &gdi->palette, FREERDP_FLIP_NONE);
+```
+
+**正确代码**:
+```cpp
+// ✅ 正确：复制整个 GDI 缓冲区到输出 buffer
+UINT32 DstFormat = PIXEL_FORMAT_BGRA32;
+return freerdp_image_copy(buffer, DstFormat, gdi->width * 4, 0, 0,
+                          gdi->width, gdi->height,
+                          gdi->primary_buffer, gdi->dstFormat, gdi->stride, 0, 0,
+                          &gdi->palette, FREERDP_FLIP_NONE);
+```
+
+**修复文件**: `entry/src/main/cpp/harmonyos_freerdp.cpp` 第 1113 行
+
+**经验教训**: `freerdp_image_copy` 的目标 stride 必须与目标 buffer 的行宽一致（全屏宽度），而非更新区域的宽度。ArkTS 层传入的是全屏大小的 buffer，因此需要复制整个 GDI 缓冲区。
 
 ---
 
