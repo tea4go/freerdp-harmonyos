@@ -986,7 +986,7 @@ struct SessionPage {
               event.stopPropagation();
               // Re-focus TextInput to prevent focus loss from Enter's default action
               setTimeout(() => {
-                this.keyboardInputController.caretController.requestFocus();
+                this.keyboardInputController.requestFocus();
               }, 20);
               return;
             }
@@ -1109,7 +1109,7 @@ struct SessionPage {
     .onKeyEvent((event: KeyEvent) => {
       // Fallback handler on Stack: catches keys that TextInput might miss
       // (e.g., Delete/Arrows consumed by TextInput's internal text editing)
-      if (!this.session || this.session.getInstance() === 0 || !this.isConnected) {
+      if (!this.session || this.session.getInstance() === 0 || this.connectionState !== ConnectionState.CONNECTED) {
         return;
       }
 
