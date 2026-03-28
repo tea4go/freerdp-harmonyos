@@ -949,7 +949,7 @@ struct SessionPage {
             // Record key press time to prevent onClick from triggering
             this.lastKeyPressTime = Date.now();
 
-            console.info(`${TAG}: TextInput onKeyEvent: type=${event.type}, keyCode=${event.keyCode}, keyText="${event.keyText}"`);
+            console.info(`${TAG}: ⌨️ TextInput onKeyEvent: type=${event.type}, keyCode=${event.keyCode}, keyText="${event.keyText}"`);
 
             // Handle all keys in Down event
             if (event.type === KeyType.Down) {
@@ -963,7 +963,7 @@ struct SessionPage {
 
               // Enter key
               if (keyCode === 2054) {  // KeyCode.KEYCODE_ENTER
-                console.info(`${TAG}: Enter key pressed`);
+                console.info(`${TAG}: ✅ Enter key pressed`);
                 const VK_RETURN = 0x0D;
                 LibFreeRDP.sendKeyEvent(instance, VK_RETURN, true);
                 setTimeout(() => {
@@ -974,7 +974,7 @@ struct SessionPage {
 
               // Space key (handle in onKeyEvent to prevent toolbar toggle)
               if (keyCode === 2044) {  // KeyCode.KEYCODE_SPACE
-                console.info(`${TAG}: Space key pressed`);
+                console.info(`${TAG}: ✅ Space key pressed`);
                 const spaceCharCode = 32;
                 LibFreeRDP.sendUnicodeKeyEvent(instance, spaceCharCode, true);
                 setTimeout(() => {
@@ -985,7 +985,7 @@ struct SessionPage {
 
               // Backspace key
               if (keyCode === 2055) {  // KeyCode.KEYCODE_DEL / KEYCODE_BACK
-                console.info(`${TAG}: Backspace key pressed`);
+                console.info(`${TAG}: ✅ Backspace key pressed`);
                 const VK_BACK = 0x08;
                 LibFreeRDP.sendKeyEvent(instance, VK_BACK, true);
                 setTimeout(() => {
@@ -999,9 +999,20 @@ struct SessionPage {
                 return;
               }
 
-              // Arrow keys
-              if (keyCode === 2012) {  // KEYCODE_DPAD_UP
-                console.info(`${TAG}: Up arrow key pressed`);
+              // Delete key - try multiple possible keyCodes
+              if (keyCode === 2056 || keyCode === 112 || keyCode === 2061) {
+                console.info(`${TAG}: ✅ Delete key pressed (keyCode=${keyCode})`);
+                const VK_DELETE = 0x2E;
+                LibFreeRDP.sendKeyEvent(instance, VK_DELETE, true);
+                setTimeout(() => {
+                  LibFreeRDP.sendKeyEvent(instance, VK_DELETE, false);
+                }, 10);
+                return;
+              }
+
+              // Arrow keys - try multiple possible keyCodes
+              if (keyCode === 2012 || keyCode === 19 || keyCode === 2051) {  // Up
+                console.info(`${TAG}: ✅ Up arrow key pressed (keyCode=${keyCode})`);
                 const VK_UP = 0x26;
                 LibFreeRDP.sendKeyEvent(instance, VK_UP, true);
                 setTimeout(() => {
@@ -1009,8 +1020,8 @@ struct SessionPage {
                 }, 10);
                 return;
               }
-              if (keyCode === 2013) {  // KEYCODE_DPAD_DOWN
-                console.info(`${TAG}: Down arrow key pressed`);
+              if (keyCode === 2013 || keyCode === 20 || keyCode === 2052) {  // Down
+                console.info(`${TAG}: ✅ Down arrow key pressed (keyCode=${keyCode})`);
                 const VK_DOWN = 0x28;
                 LibFreeRDP.sendKeyEvent(instance, VK_DOWN, true);
                 setTimeout(() => {
@@ -1018,8 +1029,8 @@ struct SessionPage {
                 }, 10);
                 return;
               }
-              if (keyCode === 2014) {  // KEYCODE_DPAD_LEFT
-                console.info(`${TAG}: Left arrow key pressed`);
+              if (keyCode === 2014 || keyCode === 21 || keyCode === 2050) {  // Left
+                console.info(`${TAG}: ✅ Left arrow key pressed (keyCode=${keyCode})`);
                 const VK_LEFT = 0x25;
                 LibFreeRDP.sendKeyEvent(instance, VK_LEFT, true);
                 setTimeout(() => {
@@ -1027,8 +1038,8 @@ struct SessionPage {
                 }, 10);
                 return;
               }
-              if (keyCode === 2015) {  // KEYCODE_DPAD_RIGHT
-                console.info(`${TAG}: Right arrow key pressed`);
+              if (keyCode === 2015 || keyCode === 22 || keyCode === 2053) {  // Right
+                console.info(`${TAG}: ✅ Right arrow key pressed (keyCode=${keyCode})`);
                 const VK_RIGHT = 0x27;
                 LibFreeRDP.sendKeyEvent(instance, VK_RIGHT, true);
                 setTimeout(() => {
@@ -1039,7 +1050,7 @@ struct SessionPage {
 
               // Tab key
               if (keyCode === 2049) {  // KeyCode.KEYCODE_TAB
-                console.info(`${TAG}: Tab key pressed`);
+                console.info(`${TAG}: ✅ Tab key pressed`);
                 const VK_TAB = 0x09;
                 LibFreeRDP.sendKeyEvent(instance, VK_TAB, true);
                 setTimeout(() => {
@@ -1048,16 +1059,8 @@ struct SessionPage {
                 return;
               }
 
-              // Delete key
-              if (keyCode === 2056) {  // KeyCode.KEYCODE_FORWARD_DEL
-                console.info(`${TAG}: Delete key pressed`);
-                const VK_DELETE = 0x2E;
-                LibFreeRDP.sendKeyEvent(instance, VK_DELETE, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendKeyEvent(instance, VK_DELETE, false);
-                }, 10);
-                return;
-              }
+              // Log unhandled keys to help debug
+              console.warn(`${TAG}: ⚠️ Unhandled key: keyCode=${keyCode}, keyText="${event.keyText}"`);
             }
           })
           .onFocus(() => {
@@ -1080,8 +1083,9 @@ struct SessionPage {
 
       console.info(`${TAG}: Stack onClick, timeSinceLastKey=${timeSinceLastKey}ms, hasFocus=${this.remoteDesktopHasFocus}`);
 
-      // If key was pressed recently (within 200ms), ignore this click
-      if (timeSinceLastKey < 200) {
+      // If key was pressed recently (within 500ms), ignore this click
+      // Increased from 200ms to 500ms to better handle Enter key
+      if (timeSinceLastKey < 500) {
         console.info(`${TAG}: Ignoring click triggered by keyboard`);
         return;
       }
