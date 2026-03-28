@@ -896,15 +896,16 @@ struct SessionPage {
         .translate({ y: -200 })
       }
 
-      // Hidden TextInput for keyboard input (used only to capture focus and IME Chinese input)
-      // Note: defaultFocus is on Stack, not here. This TextInput is only for IME composition.
+      // Hidden TextInput for IME Chinese input ONLY (NOT for physical keyboard)
+      // Physical keyboard is handled entirely by Stack's onKeyEvent
+      // TextInput must NOT be focusable to prevent focus shift after Enter key
       if (this.connectionState === ConnectionState.CONNECTED) {
         TextInput({ text: $$this.keyboardInputText, controller: this.keyboardInputController })
           .width(1)
           .height(1)
           .position({ x: -100, y: -100 })
           .opacity(0)
-          .focusable(true)
+          .focusable(false)
           .id('hiddenKeyboardInput')
           .onChange((value: string) => {
             if (!this.session || this.session.getInstance() === 0) {
@@ -1120,6 +1121,10 @@ struct SessionPage {
     .focusOnTouch(true)
     .defaultFocus(true)
     .tabIndex(0)
+    .onFocus(() => {
+      this.remoteDesktopHasFocus = true;
+      console.info(`${TAG}: Stack gained focus`);
+    })
     .onKeyEvent((event: KeyEvent) => {
       // PRIMARY keyboard handler on Stack - handles ALL keys
       // Uses Windows VK codes + sendKeyEvent for reliable key delivery
