@@ -183,3 +183,4 @@ android/Studio/local.properties
 .claude/settings.json
 .claude/projects/*/memory/
 .claude/settings.local.json
+crash_logs/hilog_output.txt
