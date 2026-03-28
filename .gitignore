@@ -142,3 +142,5 @@ android/Studio/local.properties
 聊天记录/
 .claude/settings.json
 .claude/projects/*/memory/
+grep
+.claude/settings.local.json
