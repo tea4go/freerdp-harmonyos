@@ -259,35 +259,20 @@ static BOOL harmonyos_end_paint(rdpContext* context) {
         y2 = MAX(y2, cinvalid[i].y + cinvalid[i].h);
     }
 
-    /* 
-     * ANDROID-STYLE END_PAINT: 
-     * Do NOT perform memcpy in native thread - this causes crashes!
-     * Following Android implementation: just notify ArkTS of the update region.
-     * ArkTS will handle the actual graphics data copy in its own thread.
-     * 
-     * This avoids:
-     * 1. Thread safety issues with ArrayBuffer access
-     * 2. Potential race conditions with PixelMap lifecycle
-     * 3. Native thread blocking on complex memory operations
-     */
-    
-    // Debug log (only first 5 frames)
+    /* Debug log (only first 10 frames) */
     static int frameCount = 0;
-    if (frameCount < 5) {
-        LOGI("harmonyos_end_paint: frame=%d, region=[%d,%d,%d,%d], gdi=%dx%d", 
+    if (frameCount < 10) {
+        LOGI("harmonyos_end_paint: frame=%d, region=[%d,%d,%d,%d], gdi=%dx%d",
              frameCount, x1, y1, x2-x1, y2-y1, gdi->width, gdi->height);
         frameCount++;
     }
-    
-    /* 
-     * TODO: Re-enable g_onGraphicsUpdate once we implement Android-style
-     * graphics copy in ArkTS layer (using a dedicated N-API getter function)
-     */
-    // if (g_onGraphicsUpdate) {
-    //     g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
-    // }
-    
-    LOGD("harmonyos_end_paint: Graphics update region calculated, memcpy skipped (Android-style)");
+
+    /* Call the graphics update callback to notify ArkTS layer */
+    if (g_onGraphicsUpdate) {
+        g_onGraphicsUpdate((int64_t)(uintptr_t)context->instance, x1, y1, x2 - x1, y2 - y1);
+    }
+
+    LOGD("harmonyos_end_paint: Graphics update callback called");
 
     hwnd->invalid->null = TRUE;
     hwnd->ninvalid = 0;
@@ -494,16 +479,24 @@ static BOOL harmonyos_post_connect(freerdp* instance) {
     update->DesktopResize = harmonyos_desktop_resize;
     LOGI("harmonyos_post_connect: Update callbacks set");
 
-    /* 
-     * CRITICAL: Temporarily bypass ArkTS callbacks to isolate the crash.
-     * The crash occurs immediately after "Update callbacks set" when calling
-     * either g_onSettingsChanged or g_onConnectionSuccess.
-     * 
-     * TODO: Debug TSFN implementation or callback parameters.
-     */
-    LOGI("harmonyos_post_connect: Skipping ArkTS callbacks to test connection stability");
-    
-    LOGI("harmonyos_post_connect: EXIT - connection established (UI not notified)");
+    /* Notify ArkTS layer about the connection and settings */
+    int width = (int)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+    int height = (int)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+    int bpp = (int)freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+
+    LOGI("harmonyos_post_connect: Desktop size: %dx%d, bpp: %d", width, height, bpp);
+
+    if (g_onSettingsChanged) {
+        LOGI("harmonyos_post_connect: Calling g_onSettingsChanged callback");
+        g_onSettingsChanged((int64_t)(uintptr_t)instance, width, height, bpp);
+    }
+
+    if (g_onConnectionSuccess) {
+        LOGI("harmonyos_post_connect: Calling g_onConnectionSuccess callback");
+        g_onConnectionSuccess((int64_t)(uintptr_t)instance);
+    }
+
+    LOGI("harmonyos_post_connect: EXIT - connection established");
     return TRUE;
 }
 

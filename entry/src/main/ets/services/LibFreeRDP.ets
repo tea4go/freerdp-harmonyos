@@ -15,6 +15,10 @@ interface FreerdpNative {
   setOnPreConnect(callback: (instance: number) => void): void;
   setOnDisconnecting(callback: (instance: number) => void): void;
   setOnDisconnected(callback: (instance: number) => void): void;
+  setOnSettingsChanged(callback: (instance: number, width: number, height: number, bpp: number) => void): void;
+  setOnGraphicsUpdate(callback: (instance: number, x: number, y: number, width: number, height: number) => void): void;
+  setOnGraphicsResize(callback: (instance: number, width: number, height: number, bpp: number) => void): void;
+  setOnCursorTypeChanged(callback: (instance: number, cursorType: number) => void): void;
   freerdpHasH264(): boolean;
   freerdpNew(): number;
   freerdpDisconnect(inst: number): boolean;
@@ -41,6 +45,8 @@ interface FreerdpNative {
   freerdpSendKeepalive(inst: number): boolean;
   freerdpGetIdleTime(inst: number): number;
   freerdpCheckConnectionStatus(inst: number): number;
+  freerdpUpdateGraphics(inst: number, buffer: ArrayBuffer, x: number, y: number, width: number, height: number): boolean;
+  freerdpGetFramebufferInfo(inst: number): { width: number; height: number; stride: number } | null;
 }
 
 let nativeLoaded = false;
@@ -181,6 +187,9 @@ const instanceState: Map<number, boolean> = new Map();
 // Global event listener
 let eventListener: EventListener | null = null;
 
+// Global UI event listener
+let uiEventListener: UIEventListener | null = null;
+
 // H.264 support flag
 let hasH264Support: boolean = false;
 
@@ -221,6 +230,35 @@ function initCallbacks(nativeModule: FreerdpNative): void {
     instanceState.delete(instance);
     if (eventListener) {
       eventListener.OnDisconnected(instance);
+    }
+  });
+
+  // UI callbacks
+  nativeModule.setOnSettingsChanged((instance: number, width: number, height: number, bpp: number) => {
+    console.info(`[LibFreeRDP] OnSettingsChanged: instance=${instance}, ${width}x${height}@${bpp}`);
+    if (uiEventListener) {
+      uiEventListener.OnSettingsChanged(width, height, bpp);
+    }
+  });
+
+  nativeModule.setOnGraphicsUpdate((instance: number, x: number, y: number, width: number, height: number) => {
+    console.debug(`[LibFreeRDP] OnGraphicsUpdate: instance=${instance}, region=(${x},${y},${width},${height})`);
+    if (uiEventListener) {
+      uiEventListener.OnGraphicsUpdate(x, y, width, height);
+    }
+  });
+
+  nativeModule.setOnGraphicsResize((instance: number, width: number, height: number, bpp: number) => {
+    console.info(`[LibFreeRDP] OnGraphicsResize: ${width}x${height}@${bpp}`);
+    if (uiEventListener) {
+      uiEventListener.OnGraphicsResize(width, height, bpp);
+    }
+  });
+
+  nativeModule.setOnCursorTypeChanged((instance: number, cursorType: number) => {
+    console.debug(`[LibFreeRDP] OnCursorTypeChanged: ${cursorType}`);
+    if (uiEventListener) {
+      uiEventListener.OnCursorTypeChanged(cursorType);
     }
   });
 
@@ -295,6 +333,14 @@ export class LibFreeRDP {
    */
   static setEventListener(listener: EventListener): void {
     eventListener = listener;
+  }
+
+  /**
+   * Set the UI event listener for graphics callbacks
+   */
+  static setUIEventListener(listener: UIEventListener): void {
+    uiEventListener = listener;
+    console.info(`[LibFreeRDP] UIEventListener set`);
   }
 
   /**
@@ -859,6 +905,54 @@ export class LibFreeRDP {
     } catch (e) {
       console.error(`${LibFreeRDP.TAG}: checkConnectionStatus error:`, e);
       return -1;
+    }
+  }
+
+  // ==================== Graphics Update Functions ====================
+
+  /**
+   * Update graphics from native layer to provided buffer
+   * Called from UI thread when OnGraphicsUpdate callback is received
+   * @param inst FreeRDP instance
+   * @param buffer ArrayBuffer to receive the graphics data (must be width * height * 4 bytes)
+   * @param x X position of the update region
+   * @param y Y position of the update region
+   * @param width Width of the update region
+   * @param height Height of the update region
+   * @returns true if successful
+   */
+  static updateGraphics(inst: number, buffer: ArrayBuffer, x: number, y: number, width: number, height: number): boolean {
+    if (!LibFreeRDP.ensureNativeReady()) {
+      return false;
+    }
+    if (inst === 0 || !buffer) {
+      return false;
+    }
+    try {
+      return freerdpNative!.freerdpUpdateGraphics(inst, buffer, x, y, width, height);
+    } catch (e) {
+      console.error(`${LibFreeRDP.TAG}: updateGraphics error:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Get framebuffer information (dimensions and stride)
+   * @param inst FreeRDP instance
+   * @returns Object with width, height, stride or null if failed
+   */
+  static getFramebufferInfo(inst: number): { width: number; height: number; stride: number } | null {
+    if (!LibFreeRDP.ensureNativeReady()) {
+      return null;
+    }
+    if (inst === 0) {
+      return null;
+    }
+    try {
+      return freerdpNative!.freerdpGetFramebufferInfo(inst);
+    } catch (e) {
+      console.error(`${LibFreeRDP.TAG}: getFramebufferInfo error:`, e);
+      return null;
     }
   }
 }

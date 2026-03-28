@@ -789,9 +789,87 @@ static napi_value SetOnCursorTypeChanged(napi_env env, napi_callback_info info) 
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-    
+
     harmonyos_set_cursor_type_changed_callback(OnCursorTypeChangedImpl);
     return CreateTSFN(env, args[0], "OnCursorTypeChanged", CallJS_CursorType, &g_tsfnCursorTypeChanged);
+}
+
+// ==================== Graphics Update Function ====================
+
+// freerdpUpdateGraphics(instance: number, buffer: ArrayBuffer, x: number, y: number, width: number, height: number): boolean
+static napi_value FreerdpUpdateGraphics(napi_env env, napi_callback_info info) {
+    size_t argc = 6;
+    napi_value args[6];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    int64_t instance = GetInt64(env, args[0]);
+
+    // Get ArrayBuffer info
+    uint8_t* buffer = nullptr;
+    size_t bufferLength = 0;
+    bool isDetached = false;
+    napi_is_detached_arraybuffer(env, args[1], &isDetached);
+    if (isDetached) {
+        LOGE("FreerdpUpdateGraphics: ArrayBuffer is detached");
+        napi_value result;
+        napi_get_boolean(env, false, &result);
+        return result;
+    }
+    napi_get_arraybuffer_info(env, args[1], (void**)&buffer, &bufferLength);
+
+    int32_t x = GetInt32(env, args[2]);
+    int32_t y = GetInt32(env, args[3]);
+    int32_t width = GetInt32(env, args[4]);
+    int32_t height = GetInt32(env, args[5]);
+
+    // Verify buffer size
+    size_t requiredSize = (size_t)(width * height * 4);
+    if (bufferLength < requiredSize) {
+        LOGE("FreerdpUpdateGraphics: Buffer too small (have %zu, need %zu)", bufferLength, requiredSize);
+        napi_value result;
+        napi_get_boolean(env, false, &result);
+        return result;
+    }
+
+    bool success = freerdp_harmonyos_update_graphics(instance, buffer, x, y, width, height);
+
+    napi_value result;
+    napi_get_boolean(env, success, &result);
+    return result;
+}
+
+// freerdpGetFramebufferInfo(instance: number): { width: number, height: number, stride: number } | null
+static napi_value FreerdpGetFramebufferInfo(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    int64_t instance = GetInt64(env, args[0]);
+
+    uint8_t* buffer = nullptr;
+    int width = 0, height = 0, stride = 0;
+
+    bool success = freerdp_harmonyos_get_frame_buffer(instance, &buffer, &width, &height, &stride);
+
+    if (!success || !buffer) {
+        napi_value nullVal;
+        napi_get_null(env, &nullVal);
+        return nullVal;
+    }
+
+    napi_value result;
+    napi_create_object(env, &result);
+
+    napi_value widthVal, heightVal, strideVal;
+    napi_create_int32(env, width, &widthVal);
+    napi_create_int32(env, height, &heightVal);
+    napi_create_int32(env, stride, &strideVal);
+
+    napi_set_named_property(env, result, "width", widthVal);
+    napi_set_named_property(env, result, "height", heightVal);
+    napi_set_named_property(env, result, "stride", strideVal);
+
+    return result;
 }
 
 // ==================== Module Registration ====================
@@ -817,6 +895,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         
         // Display functions
         { "freerdpSetClientDecoding", nullptr, FreerdpSetClientDecoding, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "freerdpUpdateGraphics", nullptr, FreerdpUpdateGraphics, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "freerdpGetFramebufferInfo", nullptr, FreerdpGetFramebufferInfo, nullptr, nullptr, nullptr, napi_default, nullptr },
         
         // Utility functions
         { "freerdpGetLastErrorString", nullptr, FreerdpGetLastErrorString, nullptr, nullptr, nullptr, napi_default, nullptr },
