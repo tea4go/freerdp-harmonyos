@@ -9,7 +9,6 @@
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
 import window from '@ohos.window';
-import focusControl from '@ohos.arkui.focusControl';
 import common from '@ohos.app.ability.common';
 import image from '@ohos.multimedia.image';
 import { BookmarkBase } from '../model/BookmarkBase';
@@ -986,10 +985,6 @@ struct SessionPage {
               this.keyboardInputText = '';
               this.lastInputLength = 0;
               event.stopPropagation();
-              // Re-focus TextInput to prevent focus loss from Enter's default action
-              setTimeout(() => {
-                focusControl.requestFocus('hiddenKeyboardInput');
-              }, 20);
               return;
             }
 
