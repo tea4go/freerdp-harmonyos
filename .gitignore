@@ -6,37 +6,10 @@
 # Build Outputs
 # -------------------------------------------
 build/
-out/
-dist/
-bin/
-obj/
 *.hap
 *.app
-*.o
-*.obj
-*.a
-*.lib
-*.dll
-*.dylib
-*.exe
-*.pdb
-*.ilk
-*.exp
-*.map
-*.d
-*.dwo
-*.su
 *.so.debug
 *.so.dSYM/
-**/CMakeFiles/
-**/CMakeCache.txt
-**/cmake_install.cmake
-**/CTestTestfile.cmake
-**/Testing/
-**/compile_commands.json
-**/.ninja_deps
-**/.ninja_log
-cmake-build-*/
 
 # -------------------------------------------
 # IDE & Editor
@@ -44,19 +17,15 @@ cmake-build-*/
 .idea/
 *.iml
 .vscode/
-.vs/
 *.swp
 *.swo
 *~
-*.VC.db
-*.VC.VC.opendb
-*.suo
-*.user
 
 # -------------------------------------------
 # Operating System Files
 # -------------------------------------------
 .DS_Store
+._*
 Thumbs.db
 desktop.ini
 
@@ -71,14 +40,10 @@ oh_modules.bak/
 # Logs & Temporary Files
 # -------------------------------------------
 *.log
-*.log.*
 *.tmp
 *.temp
 .cache/
 *.cache
-*.bak
-*.orig
-*.rej
 
 # -------------------------------------------
 # DevEco Studio
@@ -162,10 +127,6 @@ wip-*.sh
 native-build/
 native-install/
 native-src/
-entry/libs/*/*.so
-entry/libs/*/*.so.*
-entry/libs/*/*.a
-entry/libs/*/*.lib
 
 # -------------------------------------------
 # Legacy Android (if any)
@@ -182,5 +143,5 @@ android/Studio/local.properties
 聊天记录/
 .claude/settings.json
 .claude/projects/*/memory/
+grep
 .claude/settings.local.json
-crash_logs/hilog_output.txt
