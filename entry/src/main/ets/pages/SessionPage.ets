@@ -107,7 +107,6 @@ struct SessionPage {
   private lastInputLength: number = 0;
   private lastKeyPressTime: number = 0;  // Track last key press time
   private keyEventHandled: boolean = false;  // Prevent double-handling between onKeyEvent and onChange
-  private lastSpecialVK: number = 0;  // Track last special key VK code for proper key up handling
   
   // Components
   private sessionView: SessionView | null = null;
@@ -956,93 +955,143 @@ struct SessionPage {
             const keyText = event.keyText || '';
             console.info(`${TAG}: onKeyEvent: type=${event.type}, keyCode=${event.keyCode}, keyText="${keyText}"`);
 
-            const instance = this.session.getInstance();
+            // Only process KeyType.Down events (send immediate down+up pair, like Android aFreeRDP)
+            if (event.type !== KeyType.Down) {
+              return;
+            }
 
-            // Helper: map HarmonyOS keyCode to Windows VK code for special keys
-            const mapToVK = (kc: number, kt: string): number => {
-              // Enter
-              if (kc === 2054 || kc === 66 || kt === 'Enter' || kt === '\n') return 0x0D;
-              // Backspace
-              if (kc === 2055 || kc === 67 || kt === 'Backspace') return 0x08;
-              // Delete
-              if (kc === 2056 || kc === 112 || kc === 2061 || kt === 'Delete' || kt === 'Del') return 0x2E;
-              // Arrow Up
-              if (kc === 2012 || kc === 19 || kc === 2051 || kt === 'ArrowUp' || kt === 'Up') return 0x26;
-              // Arrow Down
-              if (kc === 2013 || kc === 20 || kc === 2052 || kt === 'ArrowDown' || kt === 'Down') return 0x28;
-              // Arrow Left
-              if (kc === 2014 || kc === 21 || kc === 2050 || kt === 'ArrowLeft' || kt === 'Left') return 0x25;
-              // Arrow Right
-              if (kc === 2015 || kc === 22 || kc === 2053 || kt === 'ArrowRight' || kt === 'Right') return 0x27;
-              // Tab
-              if (kc === 2049 || kc === 61 || kt === 'Tab') return 0x09;
-              // Escape
-              if (kc === 111 || kc === 2070 || kt === 'Escape' || kt === 'Esc') return 0x1B;
-              // Space (handled via Unicode)
-              if (kc === 2044 || kc === 62 || kt === ' ') return -1;  // Special marker
-              return 0;  // Not a special key
+            this.remoteDesktopHasFocus = true;
+
+            const instance = this.session.getInstance();
+            const keyCode = event.keyCode;
+
+            // KBDEXT flag (0x100) - must be set for extended keys (arrows, delete, etc.)
+            // The native GetVirtualScanCodeFromVirtualKeyCode checks vkcode & KBDEXT
+            // to decide which lookup table to use (KBD4T for standard, KBD4X for extended)
+            const KBDEXT = 0x100;
+
+            // Helper: send immediate key down + up pair (matches Android aFreeRDP behavior)
+            const sendKeyImmediate = (vk: number): void => {
+              LibFreeRDP.sendKeyEvent(instance, vk, true);
+              LibFreeRDP.sendKeyEvent(instance, vk, false);
             };
 
-            const keyCode = event.keyCode;
-            const vk = mapToVK(keyCode, keyText);
+            // ---- Enter (standard key, no KBDEXT needed) ----
+            if (keyCode === 2054 || keyCode === 66 || keyText === 'Enter' || keyText === '\n') {
+              console.info(`${TAG}: Enter key (keyCode=${keyCode})`);
+              sendKeyImmediate(0x0D);
+              this.keyEventHandled = true;
+              this.keyboardInputText = '';
+              this.lastInputLength = 0;
+              event.stopPropagation();
+              // Re-focus TextInput to prevent focus loss from Enter's default action
+              setTimeout(() => {
+                this.keyboardInputController.caretController.requestFocus();
+              }, 20);
+              return;
+            }
 
-            // Handle special keys with proper Down/Up event pairs
-            if (vk > 0) {
-              if (event.type === KeyType.Down) {
-                this.remoteDesktopHasFocus = true;
-                console.info(`${TAG}: Special key DOWN: keyCode=${keyCode} -> VK=0x${vk.toString(16)}`);
-                LibFreeRDP.sendKeyEvent(instance, vk, true);
-                this.keyEventHandled = true;
-                this.lastSpecialVK = vk;
-
-                // Enter key: clear TextInput to prevent content accumulation
-                if (vk === 0x0D) {
-                  this.keyboardInputText = '';
-                  this.lastInputLength = 0;
-                }
-              } else if (event.type === KeyType.Up) {
-                console.info(`${TAG}: Special key UP: keyCode=${keyCode} -> VK=0x${vk.toString(16)}`);
-                LibFreeRDP.sendKeyEvent(instance, vk, false);
-                this.lastSpecialVK = 0;
-              }
+            // ---- Backspace (standard key, no KBDEXT needed) ----
+            if (keyCode === 2055 || keyCode === 67 || keyText === 'Backspace') {
+              console.info(`${TAG}: Backspace key (keyCode=${keyCode})`);
+              sendKeyImmediate(0x08);
+              this.keyEventHandled = true;
               event.stopPropagation();
               return;
             }
 
-            // Space - send via Unicode event
-            if (vk === -1) {
-              if (event.type === KeyType.Down) {
-                this.remoteDesktopHasFocus = true;
-                console.info(`${TAG}: Space key DOWN (keyCode=${keyCode})`);
-                LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
-                this.keyEventHandled = true;
-              } else if (event.type === KeyType.Up) {
-                console.info(`${TAG}: Space key UP (keyCode=${keyCode})`);
-                LibFreeRDP.sendUnicodeKeyEvent(instance, 32, false);
-              }
+            // ---- Delete (EXTENDED key - needs KBDEXT flag!) ----
+            if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
+              console.info(`${TAG}: Delete key (keyCode=${keyCode}), VK=0x${(0x2E | KBDEXT).toString(16)}`);
+              sendKeyImmediate(0x2E | KBDEXT);
+              this.keyEventHandled = true;
               event.stopPropagation();
               return;
             }
 
-            // Printable characters: send via Unicode only on Down event
-            if (event.type === KeyType.Down && keyText.length === 1) {
+            // ---- Arrow Up (EXTENDED key) ----
+            if (keyCode === 2012 || keyCode === 19 || keyCode === 2051 || keyText === 'ArrowUp' || keyText === 'Up') {
+              console.info(`${TAG}: ArrowUp key (keyCode=${keyCode}), VK=0x${(0x26 | KBDEXT).toString(16)}`);
+              sendKeyImmediate(0x26 | KBDEXT);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Arrow Down (EXTENDED key) ----
+            if (keyCode === 2013 || keyCode === 20 || keyCode === 2052 || keyText === 'ArrowDown' || keyText === 'Down') {
+              console.info(`${TAG}: ArrowDown key (keyCode=${keyCode}), VK=0x${(0x28 | KBDEXT).toString(16)}`);
+              sendKeyImmediate(0x28 | KBDEXT);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Arrow Left (EXTENDED key) ----
+            if (keyCode === 2014 || keyCode === 21 || keyCode === 2050 || keyText === 'ArrowLeft' || keyText === 'Left') {
+              console.info(`${TAG}: ArrowLeft key (keyCode=${keyCode}), VK=0x${(0x25 | KBDEXT).toString(16)}`);
+              sendKeyImmediate(0x25 | KBDEXT);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Arrow Right (EXTENDED key) ----
+            if (keyCode === 2015 || keyCode === 22 || keyCode === 2053 || keyText === 'ArrowRight' || keyText === 'Right') {
+              console.info(`${TAG}: ArrowRight key (keyCode=${keyCode}), VK=0x${(0x27 | KBDEXT).toString(16)}`);
+              sendKeyImmediate(0x27 | KBDEXT);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Tab (standard key) ----
+            if (keyCode === 2049 || keyCode === 61 || keyText === 'Tab') {
+              console.info(`${TAG}: Tab key (keyCode=${keyCode})`);
+              sendKeyImmediate(0x09);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Escape (standard key) ----
+            if (keyCode === 111 || keyCode === 2070 || keyText === 'Escape' || keyText === 'Esc') {
+              console.info(`${TAG}: Escape key (keyCode=${keyCode})`);
+              sendKeyImmediate(0x1B);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Space - send via Unicode ----
+            if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
+              console.info(`${TAG}: Space key (keyCode=${keyCode})`);
+              LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
+              LibFreeRDP.sendUnicodeKeyEvent(instance, 32, false);
+              this.keyEventHandled = true;
+              event.stopPropagation();
+              return;
+            }
+
+            // ---- Printable characters: send via Unicode ----
+            if (keyText.length === 1) {
               const charCode = keyText.charCodeAt(0);
               if (charCode >= 32) {
-                this.remoteDesktopHasFocus = true;
                 console.info(`${TAG}: Printable char '${keyText}' (${charCode}) via onKeyEvent`);
                 LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, true);
-                setTimeout(() => {
-                  LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
-                }, 10);
+                LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
                 this.keyEventHandled = true;
                 return;
               }
             }
 
-            // Log unhandled keys (only on Down to avoid duplicate logs)
-            if (event.type === KeyType.Down) {
-              console.warn(`${TAG}: Unhandled key: keyCode=${keyCode}, keyText="${keyText}"`);
-            }
+            // Log unhandled keys
+            console.warn(`${TAG}: Unhandled key: keyCode=${keyCode}, keyText="${keyText}"`);
+          })
+          .onSubmit(() => {
+            // Consume Enter submit event to prevent TextInput from losing focus
+            // The actual Enter key is handled in onKeyEvent above
+            console.info(`${TAG}: TextInput onSubmit consumed (preventing focus loss)`);
           })
           .onFocus(() => {
             this.remoteDesktopHasFocus = true;
@@ -1057,6 +1106,76 @@ struct SessionPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#000000')
+    .onKeyEvent((event: KeyEvent) => {
+      // Fallback handler on Stack: catches keys that TextInput might miss
+      // (e.g., Delete/Arrows consumed by TextInput's internal text editing)
+      if (!this.session || this.session.getInstance() === 0 || !this.isConnected) {
+        return;
+      }
+
+      // Only process Down events
+      if (event.type !== KeyType.Down) {
+        return;
+      }
+
+      // If TextInput already handled this key, skip
+      if (this.keyEventHandled) {
+        this.keyEventHandled = false;
+        return;
+      }
+
+      const instance = this.session.getInstance();
+      const keyCode = event.keyCode;
+      const keyText = event.keyText || '';
+
+      // KBDEXT flag for extended keys
+      const KBDEXT = 0x100;
+      const sendKeyImmediate = (vk: number): void => {
+        LibFreeRDP.sendKeyEvent(instance, vk, true);
+        LibFreeRDP.sendKeyEvent(instance, vk, false);
+      };
+
+      console.info(`${TAG}: Stack onKeyEvent fallback: keyCode=${keyCode}, keyText="${keyText}"`);
+
+      // Enter
+      if (keyCode === 2054 || keyCode === 66 || keyText === 'Enter' || keyText === '\n') {
+        sendKeyImmediate(0x0D);
+        this.keyboardInputText = '';
+        this.lastInputLength = 0;
+        event.stopPropagation();
+        return;
+      }
+      // Delete (extended)
+      if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
+        sendKeyImmediate(0x2E | KBDEXT);
+        event.stopPropagation();
+        return;
+      }
+      // Arrow Up (extended)
+      if (keyCode === 2012 || keyCode === 19 || keyCode === 2051 || keyText === 'ArrowUp' || keyText === 'Up') {
+        sendKeyImmediate(0x26 | KBDEXT);
+        event.stopPropagation();
+        return;
+      }
+      // Arrow Down (extended)
+      if (keyCode === 2013 || keyCode === 20 || keyCode === 2052 || keyText === 'ArrowDown' || keyText === 'Down') {
+        sendKeyImmediate(0x28 | KBDEXT);
+        event.stopPropagation();
+        return;
+      }
+      // Arrow Left (extended)
+      if (keyCode === 2014 || keyCode === 21 || keyCode === 2050 || keyText === 'ArrowLeft' || keyText === 'Left') {
+        sendKeyImmediate(0x25 | KBDEXT);
+        event.stopPropagation();
+        return;
+      }
+      // Arrow Right (extended)
+      if (keyCode === 2015 || keyCode === 22 || keyCode === 2053 || keyText === 'ArrowRight' || keyText === 'Right') {
+        sendKeyImmediate(0x27 | KBDEXT);
+        event.stopPropagation();
+        return;
+      }
+    })
     .onClick(() => {
       // Check if this click is from keyboard (space/enter)
       const now = Date.now();
