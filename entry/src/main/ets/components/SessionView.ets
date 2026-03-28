@@ -48,6 +48,9 @@ export struct SessionView {
   
   // Pixel map for rendering
   @Prop @Watch('onPixelMapChanged') pixelMap: image.PixelMap | null = null;
+
+  // Render version counter - forces UI re-render when pixel data changes
+  @Prop renderVersion: number = 0;
   
   // View state
   @State viewScale: number = 1.0;

@@ -136,6 +136,7 @@ struct SessionPage {
   @State desktopWidth: number = 1920;
   @State desktopHeight: number = 1080;
   @State pixelMap: image.PixelMap | null = null;
+  @State renderVersion: number = 0;  // 每帧递增，强制触发 @State 变化 → Image 重绘
   @State viewScale: number = 1.0;
   @State offsetX: number = 0;
   @State offsetY: number = 0;
@@ -143,8 +144,9 @@ struct SessionPage {
   // Graphics buffer (full-screen BGRA_8888 ArrayBuffer)
   private graphicsBuffer: ArrayBuffer | null = null;
   private isUpdatingPixelMap: boolean = false;
-  private firstFrameLogged: boolean = false;
   private pixelMapOpts: image.InitializationOptions | null = null;
+  // 双缓冲：保留上一帧 PixelMap，延迟一帧释放，避免 GPU 正在渲染时被释放导致黑屏
+  private prevPixelMap: image.PixelMap | null = null;
   
   // UI state
   @State showToolbar: boolean = true;
@@ -373,6 +375,8 @@ struct SessionPage {
   /**
    * Copy native frame buffer to PixelMap and trigger UI refresh
    */
+  private frameCount: number = 0;
+
   private updateGraphicsRegion(x: number, y: number, width: number, height: number): void {
     if (!this.pixelMapOpts || !this.graphicsBuffer || this.isUpdatingPixelMap) {
       return;
@@ -384,41 +388,46 @@ struct SessionPage {
     const inst = this.session.getInstance();
     const success = LibFreeRDP.updateGraphics(inst, this.graphicsBuffer, x, y, width, height);
     if (success) {
-      // 首帧：验证像素数据并记录日志
-      if (!this.firstFrameLogged) {
-        this.firstFrameLogged = true;
+      // 前10帧：验证像素数据并记录日志
+      this.frameCount++;
+      if (this.frameCount <= 10) {
         const w = this.desktopWidth;
         const h = this.desktopHeight;
-        // 检查3个像素：左上角、中心、1/4处
         const px0 = new Uint8Array(this.graphicsBuffer, 0, 4);
         const midOff = (Math.floor(h / 2) * w + Math.floor(w / 2)) * 4;
         const pxMid = new Uint8Array(this.graphicsBuffer, midOff, 4);
-        const qOff = (Math.floor(h / 4) * w + Math.floor(w / 4)) * 4;
-        const pxQ = new Uint8Array(this.graphicsBuffer, qOff, 4);
-        console.info(`${TAG}: First frame! region=(${x},${y},${width},${height}) ` +
+        console.info(`${TAG}: frame#${this.frameCount} region=(${x},${y},${width}x${height}) ` +
           `(0,0)=B${px0[0]}G${px0[1]}R${px0[2]}A${px0[3]} ` +
-          `(center)=B${pxMid[0]}G${pxMid[1]}R${pxMid[2]}A${pxMid[3]} ` +
-          `(quarter)=B${pxQ[0]}G${pxQ[1]}R${pxQ[2]}A${pxQ[3]}`);
+          `(center)=B${pxMid[0]}G${pxMid[1]}R${pxMid[2]}A${pxMid[3]}`);
       }
-      // 关键修复：创建新 PixelMap（而非复用旧引用），确保 @State 检测到引用变化触发 Image 重绘
-      // writeBufferToPixels + 旧引用不变 → ArkTS 批量优化掉 → Image 不重绘
-      const opts = this.pixelMapOpts;
-      const buf = this.graphicsBuffer;
-      const oldPixelMap = this.pixelMap;
-      image.createPixelMap(buf, opts).then((newPixelMap) => {
-        if (oldPixelMap) {
-          oldPixelMap.release();  // 释放旧 PixelMap，避免内存泄漏
-        }
-        this.pixelMap = newPixelMap;  // 新引用 → @State 变化 → Image 组件重绘
+
+      if (this.pixelMap) {
+        // 每帧创建新 PixelMap → 新引用 → @State 检测到变化 → Image 强制重新读取像素数据
+        // 双缓冲：保留前一帧 PixelMap 延迟释放，避免 GPU 正在渲染时 PixelMap 被释放导致黑屏
+        const opts = this.pixelMapOpts!;
+        const buf = this.graphicsBuffer!;
+        const oldPm = this.pixelMap;
+        image.createPixelMap(buf, opts).then((newPm: image.PixelMap) => {
+          // 释放前前一帧（双缓冲：当前帧 oldPm 仍在渲染，释放 prevPixelMap 安全）
+          if (this.prevPixelMap) {
+            this.prevPixelMap.release();
+          }
+          this.prevPixelMap = oldPm;  // 当前帧的旧 PixelMap 保留给 GPU 渲染
+          this.pixelMap = newPm;  // 新引用 → @State 变化 → @Prop 传播 → Image 重绘
+          this.isUpdatingPixelMap = false;
+          if (this.frameCount <= 10) {
+            console.info(`${TAG}: frame#${this.frameCount} createPixelMap OK, double-buffer`);
+          }
+        }).catch((e: Error) => {
+          console.error(`${TAG}: createPixelMap failed: ${e}`);
+          this.isUpdatingPixelMap = false;
+        });
+      } else {
+        console.warn(`${TAG}: pixelMap is null, skipping update`);
         this.isUpdatingPixelMap = false;
-      }).catch((e: Error) => {
-        console.error(`${TAG}: createPixelMap failed: ${e}`);
-        this.isUpdatingPixelMap = false;
-      });
+      }
     } else {
-      if (!this.firstFrameLogged) {
-        console.warn(`${TAG}: updateGraphics FAILED inst=${inst}`);
-      }
+      console.warn(`${TAG}: updateGraphics FAILED inst=${inst}`);
       this.isUpdatingPixelMap = false;
     }
   }
@@ -764,7 +773,8 @@ struct SessionPage {
           instance: this.session?.getInstance() ?? 0,
           desktopWidth: this.desktopWidth,
           desktopHeight: this.desktopHeight,
-          pixelMap: this.pixelMap
+          pixelMap: this.pixelMap,
+          renderVersion: this.renderVersion
         })
       } else {
         // Connection status view

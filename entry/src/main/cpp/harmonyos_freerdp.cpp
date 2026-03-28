@@ -1066,7 +1066,7 @@ bool freerdp_harmonyos_parse_arguments(int64_t instance, const char** args, int 
      * 一旦服务器用 GFX 管道，gdi->primary_buffer 永远不更新，导致持续黑屏。
      */
     freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportGraphicsPipeline, FALSE);
-    freerdp_settings_set_bool(inst->context->settings, FreeRDP_SupportDynamicChannels, FALSE);
+    /* 注意：不禁止 FreeRDP_SupportDynamicChannels，否则剪贴板通道会失败导致连接断开 */
     freerdp_settings_set_string(inst->context->settings, FreeRDP_ConfigPath, ".");
     
     LOGI("parse_arguments: Security protocols set - RDP|TLS|NLA, IgnoreCertificate=TRUE");
