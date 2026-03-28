@@ -75,7 +75,11 @@ export struct TouchPointerView {
   // Touch tracking
   private lastTouchX: number = 0;
   private lastTouchY: number = 0;
-  
+  private touchStartTime: number = 0;
+  private touchStartX: number = 0;
+  private touchStartY: number = 0;
+  private hasMoved: boolean = false;
+
   // Listener
   private listener: TouchPointerListener | null = null;
   
@@ -133,31 +137,55 @@ export struct TouchPointerView {
   }
 
   /**
-   * Handle touch on pointer
+   * Handle touch on pointer - unified touch handler for drag, tap, and long press
    */
   private onPointerTouch(event: TouchEvent): void {
     if (event.touches.length === 0) return;
-    
+
     const touch = event.touches[0];
-    
+
     switch (event.type) {
       case TouchType.Down:
         this.lastTouchX = touch.x;
         this.lastTouchY = touch.y;
+        this.touchStartTime = Date.now();
+        this.touchStartX = touch.x;
+        this.touchStartY = touch.y;
+        this.hasMoved = false;
         break;
-        
+
       case TouchType.Move:
         const dx = (touch.x - this.lastTouchX) / this.viewScale;
         const dy = (touch.y - this.lastTouchY) / this.viewScale;
-        
-        this.moveTo(this.pointerX + dx, this.pointerY + dy);
-        
+
+        // Check if moved beyond threshold (5 pixels)
+        const totalDx = touch.x - this.touchStartX;
+        const totalDy = touch.y - this.touchStartY;
+        if (!this.hasMoved && (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5)) {
+          this.hasMoved = true;
+        }
+
+        if (this.hasMoved) {
+          this.moveTo(this.pointerX + dx, this.pointerY + dy);
+        }
+
         this.lastTouchX = touch.x;
         this.lastTouchY = touch.y;
         break;
-        
+
       case TouchType.Up:
       case TouchType.Cancel:
+        if (!this.hasMoved) {
+          const elapsed = Date.now() - this.touchStartTime;
+          if (elapsed < 300) {
+            // Short tap = left click
+            this.leftClick();
+          } else if (elapsed >= 500) {
+            // Long press = right click
+            this.rightClick();
+          }
+        }
+        this.hasMoved = false;
         break;
     }
   }
@@ -271,49 +299,16 @@ export struct TouchPointerView {
         }
         .width(TouchPointerView.POINTER_SIZE)
         .height(TouchPointerView.POINTER_SIZE)
-        
-        // Touch area (larger than visual for easier interaction)
-        Column()
-          .width(TouchPointerView.TOUCH_AREA_SIZE)
-          .height(TouchPointerView.TOUCH_AREA_SIZE)
-          .backgroundColor(this.isDragging ? '#30FF0000' : '#00000000')
-          .borderRadius(TouchPointerView.TOUCH_AREA_SIZE / 2)
-          .position({
-            x: -TouchPointerView.TOUCH_AREA_SIZE / 2 + TouchPointerView.POINTER_SIZE / 2,
-            y: -TouchPointerView.TOUCH_AREA_SIZE / 2 + TouchPointerView.POINTER_SIZE / 2
-          })
-          .onTouch((event: TouchEvent) => {
-            this.onPointerTouch(event);
-          })
       }
+      .width(TouchPointerView.TOUCH_AREA_SIZE)
+      .height(TouchPointerView.TOUCH_AREA_SIZE)
       .position({
-        x: this.getViewPosition().x,
-        y: this.getViewPosition().y
+        x: this.getViewPosition().x - (TouchPointerView.TOUCH_AREA_SIZE - TouchPointerView.POINTER_SIZE) / 2,
+        y: this.getViewPosition().y - (TouchPointerView.TOUCH_AREA_SIZE - TouchPointerView.POINTER_SIZE) / 2
       })
-      .gesture(
-        LongPressGesture({ repeat: false, duration: 500 })
-          .onAction(() => {
-            // Long press for right click
-            this.rightClick();
-          })
-      )
-      .gesture(
-        TapGesture({ count: 1 })
-          .onAction(() => {
-            this.leftClick();
-          })
-      )
-      .gesture(
-        TapGesture({ count: 2 })
-          .onAction(() => {
-            // Double tap to start/end drag
-            if (this.isDragging) {
-              this.endDrag();
-            } else {
-              this.startDrag();
-            }
-          })
-      )
+      .onTouch((event: TouchEvent) => {
+        this.onPointerTouch(event);
+      })
     }
   }
 }
