@@ -897,6 +897,7 @@ struct SessionPage {
       }
 
       // Hidden TextInput for keyboard input (used only to capture focus and IME Chinese input)
+      // Note: defaultFocus is on Stack, not here. This TextInput is only for IME composition.
       if (this.connectionState === ConnectionState.CONNECTED) {
         TextInput({ text: $$this.keyboardInputText, controller: this.keyboardInputController })
           .width(1)
@@ -904,7 +905,6 @@ struct SessionPage {
           .position({ x: -100, y: -100 })
           .opacity(0)
           .focusable(true)
-          .defaultFocus(true)
           .id('hiddenKeyboardInput')
           .onChange((value: string) => {
             if (!this.session || this.session.getInstance() === 0) {
@@ -1116,9 +1116,13 @@ struct SessionPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#000000')
+    .focusable(true)
+    .focusOnTouch(true)
+    .defaultFocus(true)
+    .tabIndex(0)
     .onKeyEvent((event: KeyEvent) => {
-      // Fallback handler on Stack: catches keys that TextInput might miss
-      // (e.g., Delete/Arrows consumed by TextInput's internal text editing)
+      // PRIMARY keyboard handler on Stack - catches ALL keys including Backspace
+      // This is more reliable than TextInput's onKeyEvent which may consume keys internally
       if (!this.session || this.session.getInstance() === 0 || this.connectionState !== ConnectionState.CONNECTED) {
         return;
       }
@@ -1145,10 +1149,11 @@ struct SessionPage {
         LibFreeRDP.sendKeyEvent(instance, vk, false);
       };
 
-      console.info(`${TAG}: Stack onKeyEvent fallback: keyCode=${keyCode}, keyText="${keyText}"`);
+      console.info(`${TAG}: Stack onKeyEvent PRIMARY: keyCode=${keyCode}, keyText="${keyText}"`);
 
-      // Backspace (standard key)
+      // Backspace (standard key, no KBDEXT) - HARMONYOS KEYCODE_DEL = 2055
       if (keyCode === 2055 || keyCode === 67 || keyText === 'Backspace') {
+        console.info(`${TAG}: Stack handling Backspace key`);
         sendKeyImmediate(0x08);
         event.stopPropagation();
         return;
@@ -1161,8 +1166,9 @@ struct SessionPage {
         event.stopPropagation();
         return;
       }
-      // Delete (extended)
+      // Delete (extended) - HARMONYOS KEYCODE_FORWARD_DEL = 2056
       if (keyCode === 2056 || keyCode === 112 || keyCode === 2061 || keyText === 'Delete' || keyText === 'Del') {
+        console.info(`${TAG}: Stack handling Delete key`);
         sendKeyImmediate(0x2E | KBDEXT);
         event.stopPropagation();
         return;
@@ -1190,6 +1196,36 @@ struct SessionPage {
         sendKeyImmediate(0x27 | KBDEXT);
         event.stopPropagation();
         return;
+      }
+      // Tab (standard key)
+      if (keyCode === 2049 || keyCode === 61 || keyText === 'Tab') {
+        sendKeyImmediate(0x09);
+        event.stopPropagation();
+        return;
+      }
+      // Escape (standard key)
+      if (keyCode === 111 || keyCode === 2070 || keyText === 'Escape' || keyText === 'Esc') {
+        sendKeyImmediate(0x1B);
+        event.stopPropagation();
+        return;
+      }
+      // Space - send via Unicode
+      if (keyCode === 2044 || keyCode === 62 || keyText === ' ') {
+        LibFreeRDP.sendUnicodeKeyEvent(instance, 32, true);
+        LibFreeRDP.sendUnicodeKeyEvent(instance, 32, false);
+        event.stopPropagation();
+        return;
+      }
+      // Printable characters: send via Unicode
+      if (keyText.length === 1) {
+        const charCode = keyText.charCodeAt(0);
+        if (charCode >= 32) {
+          console.info(`${TAG}: Stack sending printable char '${keyText}' (${charCode}) via Unicode`);
+          LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, true);
+          LibFreeRDP.sendUnicodeKeyEvent(instance, charCode, false);
+          event.stopPropagation();
+          return;
+        }
       }
     })
     .onClick(() => {
