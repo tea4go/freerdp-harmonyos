@@ -352,9 +352,48 @@ git push origin hmrdp
 
 | 日期 | 修改内容 |
 |------|---------|
+| 2026-03-28 | 修复 SIGABRT 崩溃：替换 freerdp_settings_get_uint32() 为直接成员访问 |
 | 2026-03-28 | 实现远程桌面图形渲染管道修复 |
 | 2026-03-28 | 添加自动启动连接功能 |
 | 2026-03-28 | 创建本文档 |
+
+---
+
+## 13. 关键技术问题及解决方案
+
+### 13.1 问题: freerdp_settings_get_uint32() 导致 SIGABRT 崩溃
+
+**现象**: 连接成功后应用立即崩溃 (SIGABRT)
+
+**根本原因**: FreeRDP 库内部使用 `WINPR_ASSERT` 宏进行参数验证。当检测到无效参数时触发 `abort()`。
+
+**错误代码**:
+```cpp
+// ❌ 错误：会触发 abort()
+UINT32 width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+UINT32 height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+UINT32 bpp = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+```
+
+**正确代码**:
+```cpp
+// ✅ 正确：直接访问成员变量
+UINT32 width = settings->DesktopWidth;
+UINT32 height = settings->DesktopHeight;
+UINT32 bpp = settings->ColorDepth;
+```
+
+**修复文件**: `entry/src/main/cpp/harmonyos_freerdp.cpp`
+
+**受影响的函数**:
+- `harmonyos_desktop_resize()` - 第 291-293 行
+- `harmonyos_post_connect()` - 第 483-485 行
+- `freerdp_harmonyos_set_client_decoding()` - 第 1305-1306 行
+- `freerdp_harmonyos_enter_background_mode()` - 第 1385-1386 行
+- `freerdp_harmonyos_exit_background_mode()` - 第 1425-1426 行
+- `freerdp_harmonyos_request_refresh()` - 第 1609-1610 行
+
+**经验教训**: 在 HarmonyOS/musl libc 环境下，避免使用可能触发 abort() 的 FreeRDP API 函数，改用直接成员访问更安全。
 
 ---
 
