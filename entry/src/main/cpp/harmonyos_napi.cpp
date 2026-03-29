@@ -902,3 +902,13 @@ static napi_value Init(napi_env env, napi_value exports) {
 }
 
 NAPI_MODULE(freerdp_harmonyos, Init)
+
+/*
+ * HarmonyOS NEXT requires napi_register_module_v1 as an exported symbol.
+ * The NAPI_MODULE macro above uses __attribute__((constructor)) which places
+ * registration in .init_array, but this can be stripped during build.
+ * Exporting napi_register_module_v1 directly ensures reliable module loading.
+ */
+extern "C" __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_env env, napi_value exports) {
+    return Init(env, exports);
+}

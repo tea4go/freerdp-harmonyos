@@ -412,7 +412,79 @@ git push origin hmrdp
 | 日期 | 修改内容 |
 |------|---------|
 | 2026-03-28 | 创建 macOS 编译指南 |
-| 2026-03-28 | 修复黑屏问题：禁用GFX管道 + 强制Alpha=0xFF |
+| 2026-03-28 | 修复黑屏问题:禁用GFX管道 + 强制Alpha=0xFF |
+| 2026-03-29 | 修复原生库加载失败：添加 napi_register_module_v1 导出 |
+
+---
+
+## 14. 本地重新编译原生库 (macOS)
+
+### 14.1 问题: 原生库加载失败
+
+报 "原生库加载失败"
+
+**现象**: 应用启动时提示 "原生库加载失败"
+
+**根本原因**: HarmonyOS NEXT 通过 `dlopen` 加载 N-API 模块时，查找导出符号 `napi_register_module_v1`。 CI 构建的库使用 `NAPI_MODULE` 宏（基于 `__attribute__((constructor))`），将注册函数放入 `.init_array` 段。但 `.init_array` 中的构造函数指针全为零（被 strip 或工具链问题），导致 `napi_module_register()` 永远不被调用。
+
+**解决方案**: 直接导出 `napi_register_module_v1` 函数���绕过构造函数机制:
+
+```cpp
+// harmonyos_napi.cpp 末尾添加:
+extern "C" __attribute__((visibility("default"))) napi_value napi_register_module_v1(napi_env env, napi_value exports) {
+    return Init(env, exports);
+}
+```
+
+### 14.2 本地重新编译步骤
+
+```bash
+# 1. 设置 NDK 路径
+NDK_ROOT="/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/native"
+CLANG="$NDK_ROOT/llvm/bin/clang"
+CLANGXX="$NDK_ROOT/llvm/bin/clang++"
+SYSROOT="$NDK_ROOT/sysroot"
+LIBS_DIR="entry/libs/arm64-v8a"
+SRC_DIR="entry/src/main/cpp"
+INC_DIR="entry/libs/include"
+BUILD_DIR="/tmp/freerdp_ohos_build"
+
+rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
+
+# 2. 编译 C++ 文件
+for f in harmonyos_freerdp.cpp harmonyos_napi.cpp; do
+  "$CLANGXX" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -D__MUSL__ \
+    -fPIC -O2 -Wall -Wextra -DOHOS_PLATFORM -DNAPI_VERSION=8 -std=c++17 \
+    -I"$SRC_DIR" -I"$INC_DIR/freerdp3" -I"$INC_DIR/winpr3" \
+    -I"entry/libs/FreeRDP-3.10.3/winpr/include" \
+    -c "$SRC_DIR/$f" -o "$BUILD_DIR/${f%.cpp}.o"
+done
+
+# 3. 编译 C 文件
+for f in harmonyos_event.c harmonyos_cliprdr.c harmonyos_jni_callback.c harmonyos_jni_utils.c freerdp_client_compat.c; do
+  "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -D__MUSL__ \
+    -D_POSIX_C_SOURCE=200809L -fPIC -O2 -Wall -Wextra -DOHOS_PLATFORM -DNAPI_VERSION=8 -std=c11 \
+    -I"$SRC_DIR" -I"$INC_DIR/freerdp3" -I"$INC_DIR/winpr3" \
+    -I"entry/libs/FreeRDP-3.10.3/winpr/include" \
+    -c "$SRC_DIR/$f" -o "$BUILD_DIR/${f%.c}.o"
+done
+
+# 4. 链接（不要 strip!）
+"$CLANGXX" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -D__MUSL__ \
+  -shared -fPIC \
+  -o /tmp/libfreerdp_harmonyos.so \
+  "$BUILD_DIR"/*.o \
+  -L"$LIBS_DIR" -lace_napi.z -lhilog_ndk.z -lOpenSLES \
+  -lfreerdp-client3 -lfreerdp3 -lwinpr3 \
+  -Wl,--allow-shlib-undefined -Wl,-rpath,'$ORIGIN'
+
+# 5. 夋制到目标（不要直接覆盖，用临时文件再 cp)
+cp /tmp/libfreerdp_harmonyos.so "$LIBS_DIR/libfreerdp_harmonyos.so"
+```
+
+**注意**:
+- 不要使用 `llvm-strip --strip-unneeded`，会清除 `.init_array` 中的构造函数
+- 确保 `libc++_shared.so` 在 `entry/libs/arm64-v8a/` 目录中
 
 ---
 
